@@ -1,0 +1,4 @@
+#!/bin/bash
+export GANGADIRACENVIRONMENT=/afs/ihep.ac.cn/bes3/bvrs/ganga/diracenv 
+export GAUDIRUNENV=/afs/ihep.ac.cn/bes3/bvrs/ganga/gaudirunenv 
+source $GAUDIRUNENV
