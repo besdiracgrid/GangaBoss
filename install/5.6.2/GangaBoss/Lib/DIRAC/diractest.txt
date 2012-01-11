@@ -1,0 +1,3 @@
+HHHHHHHHHHHHHHHHHHHHHHHHdirac cmd is
+execfile('/home/cms/zhangxm/gangadir/workspace/zhangxm/LocalXML/58/input/dirac-script.py')
+Error submitting job to Dirac: {'OK': True, 'Value': 518}
