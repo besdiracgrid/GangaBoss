@@ -17,6 +17,8 @@ from GangaBoss.Lib.Dataset.DatasetUtils import *
 from Francesc import GaudiExtras
 from PythonOptionsParser import PythonOptionsParser
 from Ganga.Utility.Shell import Shell
+from DIRAC.Interfaces.API.Badger import Badger
+
 import MySQLdb
 logger = Ganga.Utility.logging.getLogger()
 config = Ganga.Utility.Config.getConfig('Boss')
@@ -220,7 +222,12 @@ class BossSplitter(ISplitter):
         logger.error("zhangxm log: runFrom %d, runTo %d\n" % (runFrom, runTo))
         evtMax = parser.get_EvtMax()
         outputFileName = parser.get_OutputFileName()
-        head = '_'.join(outputFileName.split('_')[0:3])
+        head = '_'.join(outputFileName.split('_')[0:4])
+        bossVer = outputFileName.split('_')[0]
+        resonance = outputFileName.split('_')[1]
+        eventType = outputFileName.split('_')[2]
+        streamId = outputFileName.split('_')[3]
+        expNum = 'exp2'
         if serial: 
            sql = 'select RunNo,OfflineTwoGam from OfflineLum where RunNo >= %d and RunNo <= %d && SftVer = "6.5.5";' % (runFrom, runTo)
         else:
@@ -243,6 +250,10 @@ class BossSplitter(ISplitter):
             lumAll = lumAll + row[1]
         cursor.execute(sql)
         cursor1 = connection.cursor()
+        logger.error('zhangxm log: parameters for file catalog: \
+                     eventType->%s, streamId->%s, resonance->%s, expNum->%s, bossVer->%s' \
+                     % (eventType, streamId, resonance, expNum, bossVer))
+        fcdir = self._createFcDir(job, eventType, streamId, resonance, expNum, bossVer)
         for row in cursor.fetchall():
             runId = row[0] 
             lum = row[1]
@@ -264,7 +275,7 @@ class BossSplitter(ISplitter):
                   eventId = eventIdIni+(i-1)*evtMaxPerJob
                   fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
                   rndmSeed = rndmSeed + 1
-                  subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed)
+                  subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
                   subjobs.append(subjob)
             logger.error("zhangxm log: i %d\n" % i)
             eventId = eventIdIni+i*evtMaxPerJob
@@ -282,7 +293,7 @@ class BossSplitter(ISplitter):
             eventNum = currentNum - i*evtMaxPerJob
             logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
             rndmSeed = rndmSeed + 1
-            subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed)
+            subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
             subjobs.append(subjob)
         sql_rndm = 'update seed set MaxSeed = %d;' % rndmSeed
         cursor1.execute(sql_rndm)
@@ -292,7 +303,18 @@ class BossSplitter(ISplitter):
         connection.close()
         return subjobs
 
-    def _createSubjob(self, job, runId, eventId, fileId, eventNum, rndmSeed):
+    def _createFcDir(self, job, eventType, streamId, resonance, expNum, bossVer):
+        badger = Badger()
+        dataType = 'rtraw'
+        if job.application.recoptsfile:
+           dataType = 'dst'
+        metaDic = {'dataType': dataType, 'eventType': eventType, 'streamId': streamId, \
+                   'resonance': resonance, 'expNum': expNum,'bossVer': bossVer}
+        fcdir = badger.registerHierarchicalDir(metaDic)
+        logger.error("zhangxm log: create file catalog directory for later files registeration in FC!\n")
+        return fcdir
+
+    def _createSubjob(self, job, runId, eventId, fileId, eventNum, rndmSeed, fcdir):
         j = create_gaudi_subjob(job, job.inputdata)
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("data.opts")\n'
@@ -304,7 +326,10 @@ class BossSplitter(ISplitter):
         logger.error("zhangxm log: data.opts_sopts:%s", sopts)
         j.application.extra.input_buffers['data.opts'] += sopts
         j.application.extra.input_buffers['data.py'] += opts
-        j.application.extra.outputdata.files = fileId
+        j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + fileId
+        j.application.outputfile = fcdir + "/" + fileId
+        j.application.runL = runId 
+        #j.application.extra.outputdata.location = fcdir
         if j.application.recoptsfile:
            opts = 'from Gaudi.Configuration import * \n'
            opts += 'importOptions("recdata.opts")\n'
@@ -316,7 +341,8 @@ class BossSplitter(ISplitter):
            logger.error("zhangxm log: data.opts:%s", sopts)
            j.application.extra.input_buffers['recdata.opts'] += sopts
            j.application.extra.input_buffers['recdata.py'] += opts
-           j.application.extra.outputdata.files = recfileId
+           j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + recfileId
+           j.application.outputfile = fcdir + "/" + recfileId
         return j 
 
     def _getShell(self):

@@ -59,7 +59,7 @@ class Gaudi(Francesc):
     _name = 'Gaudi'
     __doc__ = GaudiDocString(_name)
     _category = 'applications'
-    _exportmethods = ['getenv','getpack', 'make', 'cmt']
+    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register']
 
     schema = get_common_gaudi_schema()
     docstr = 'The name of the optionsfile. Import statements in the file ' \
@@ -242,7 +242,7 @@ class ###CLASS###(Gaudi):
     _name = '###CLASS###'
     __doc__ = GaudiDocString(_name)
     _schema = myschema.inherit_copy()
-    _exportmethods = ['getenv','getpack', 'make', 'cmt']
+    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register']
 
     def __init__(self):
         super(###CLASS###, self).__init__()
@@ -258,10 +258,13 @@ class ###CLASS###(Gaudi):
     def make(self,argument=''):
         return super(###CLASS###,self).make(argument)
 
+    def register(self):
+        return super(###CLASS###,self).register()
+
     def cmt(self,command):
         return super(###CLASS###,self).cmt(command)
 
-    for method in ['getenv','getpack','make','cmt']:
+    for method in ['getenv','getpack','make','cmt','register']:
         setattr(eval(method), \"__doc__\", getattr(Gaudi, method).__doc__)
 
 """

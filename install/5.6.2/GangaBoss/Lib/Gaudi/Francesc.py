@@ -13,6 +13,7 @@ from GangaBoss.Lib.Dataset.BesDataset import BesDataset
 from GangaBoss.Lib.Dataset.OutputData import OutputData
 from GaudiUtils import *
 from Ganga.GPIDev.Lib.File import File
+from DIRAC.Interfaces.API.Badger import Badger
 from Ganga.Core import ApplicationConfigurationError
 import Ganga.Utility.Config
 
@@ -24,6 +25,12 @@ def get_common_gaudi_schema():
     schema = {}
     docstr = 'The version of the application (like "v19r2")'
     schema['version'] = SimpleItem(defvalue=None,
+                                   typelist=['str','type(None)'],doc=docstr)
+    docstr = 'run number'
+    schema['runL'] = SimpleItem(defvalue=None,
+                                   typelist=['int','type(None)'],doc=docstr)
+    docstr = 'outputfile'
+    schema['outputfile'] = SimpleItem(defvalue=None,
                                    typelist=['str','type(None)'],doc=docstr)
     docstr = 'The platform the application is configured for (e.g. ' \
              '"slc4_ia32_gcc34")'
@@ -55,7 +62,7 @@ class Francesc(IApplication):
     '''Parent for all Gaudi and GaudiPython applications, should not be used
     directly.'''    
     _name = 'Francesc'
-    _exportmethods = ['getenv','getpack', 'make', 'cmt']
+    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register']
     _schema = Schema(Version(1, 1), {})
 
     def get_gaudi_appname(self):
@@ -186,6 +193,17 @@ class Francesc(IApplication):
         config = Ganga.Utility.Config.getConfig('Boss')
         command = config['make_cmd']
         CMTscript.CMTscript(self,command)
+
+    def register(self):
+        """ register data file in File Catalog"""
+        lfn = self.outputfile
+        #lfn = '/BES3/File/psip/655/mc/all/exp1/stream001/655_psip_all_stream001_run8093_file0002.dst'
+        #entryDict = {'runL':8093}
+        logger.error('zhangxm log:  the options file: %s %d', lfn, self.runL)
+        entryDict = {'runL':self.runL}
+        badger = Badger()
+        result = badger.registerFileMetadata(lfn,entryDict)
+        return result
 
     def cmt(self, command):
         """Execute a cmt command in the cmt user area pointed to by the
