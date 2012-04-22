@@ -47,12 +47,16 @@ cd $BESROOT/slc5_amd64_gcc43/###BOSS_VERSION###/
 source setup.sh
 source scripts/###BOSS_VERSION###/setup.sh
 echo $CMTPATH
-export BossDir=$HOME/boss/TestRelease
+if [[ "$HOME" != *afs* ]]; then
+   export BossDir=$HOME/boss/TestRelease
+else
+   export BossDir=/scratch/boss/TestRelease
+fi
 if [ ! -d "$BossDir" ]; then 
   mkdir -p $BossDir
 fi
 cp -r $BESROOT/slc5_amd64_gcc43/###BOSS_VERSION###/dist/###BOSS_VERSION###/TestRelease/* $BossDir/
-cd $HOME/boss/TestRelease/*/cmt
+cd $BossDir/*/cmt
 source setup.sh
 cd $CURDIR/
 gaudirun.py -n -v -o options.opts options.pkl data.py
