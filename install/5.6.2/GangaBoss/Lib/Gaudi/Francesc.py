@@ -197,8 +197,6 @@ class Francesc(IApplication):
     def register(self):
         """ register data file in File Catalog"""
         lfn = self.outputfile
-        #lfn = '/BES3/File/psip/655/mc/all/exp1/stream001/655_psip_all_stream001_run8093_file0002.dst'
-        #entryDict = {'runL':8093}
         logger.error('zhangxm log:  the options file: %s %d', lfn, self.runL)
         entryDict = {'runL':self.runL}
         badger = Badger()
