@@ -3,6 +3,7 @@ from Ganga.GPIDev.Base import GangaObject
 from LogicalFile import *
 from BesDataset import *
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
+from DIRAC.Interfaces.API.Badger import Badger
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
@@ -126,7 +127,7 @@ RecoToDST-07/90000000/DST" ,
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-class BKQueryDict(GangaObject):
+class BDQueryByMeta(GangaObject):
     """Class for handling bookkeeping queries using dictionaries.
     
     Use BKQuery if you do not know how to use BK dictionaries!
@@ -143,55 +144,36 @@ class BKQueryDict(GangaObject):
     data = bkqd.getDataset()
     """
     
-    _bkQueryTemplate = {'SimulationConditions'     : 'All',
-                        'DataTakingConditions'     : 'All',
-                        'ProcessingPass'           : 'All',
-                        'FileType'                 : 'All',
-                        'EventType'                : 'All',
-                        'ConfigName'               : 'All',
-                        'ConfigVersion'            : 'All',
-                        'ProductionID'             :     0,
-                        'StartRun'                 :     0,
-                        'EndRun'                   :     0,
-                        'DataQualityFlag'          : 'All'}
-    
     schema = {}
-    docstr = 'Dirac BK query dictionary.'
-    schema['dict'] = SimpleItem(defvalue=_bkQueryTemplate,#typelist=['dict'],
-                                doc=docstr)
+    docstr = 'Dirac badger query condition.'
+    schema['condition'] = SimpleItem(defvalue='', doc=docstr)
     _schema = Schema(Version(1,0), schema)
     _category = ''
-    _name = "BKQueryDict"
+    _name = "BDQueryByMeta"
     _exportmethods = ['getDataset']
 
     def __init__(self):
-        super(BKQueryDict, self).__init__()
+        super(BDQueryByMeta, self).__init__()
 
     def __construct__(self, args):
         if (len(args) != 1) or (type(args[0]) is not type({})):
-            super(BKQueryDict,self).__construct__(args)
+            super(BDQueryByMeta,self).__construct__(args)
         else:
-            self.dict = args[0]
+            self.condition = args[0]
             
     def getDataset(self):
         '''Gets the dataset from the bookkeeping for current dict.'''
-        if not self.dict: return None
-        cmd = 'result = DiracCommands.bkQueryDict(%s)' % self.dict
-        result = get_result(cmd,'BK query error.','BK query error.')
+        if not self.condition: return None
+        badger = Badger()
         files = []
-        value = result['Value']
-        if value.has_key('LFNs'): files = value['LFNs']
-        metadata = {}
-        if not type(files) is list:
-            if files.has_key('LFNs'): # i.e. a dict of LFN:Metadata
-                metadata = files['LFNs'].copy()
-                files = files['LFNs'].keys()
-        
+        files = badger.getFilesByMetadataQuery(self.condition) 
+
         ds = BesDataset()
-        for f in files: ds.files.append(LogicalFile(f))
-        
-        if metadata:
-            ds.metadata = {'OK':True,'Value':metadata}
+        for f in files: 
+           logicalFile = "LFN:"+f  
+           logger.error("zhangxm log: data files LFN: %s", f)
+           ds.files.append(logicalFile)
+
         
         return GPIProxyObjectFactory(ds)
 
