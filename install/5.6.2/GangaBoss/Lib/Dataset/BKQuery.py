@@ -128,19 +128,11 @@ RecoToDST-07/90000000/DST" ,
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
 class BDQueryByMeta(GangaObject):
-    """Class for handling bookkeeping queries using dictionaries.
-    
-    Use BKQuery if you do not know how to use BK dictionaries!
+    """Class for handling Badger queries using metadata.
     
     Example Usage:
     
-    bkqd = BKQueryDict()
-    bkqd.dict['ConfigVersion'] = 'Collision09'
-    bkqd.dict['ConfigName'] = 'Boss'
-    bkqd.dict['ProcessingPass'] = 'Real Data + RecoToDST-07'
-    bkqd.dict['EventType'] = '90000000'
-    bkqd.dict['FileType'] = 'DST'
-    bkqd.dict['DataTakingConditions'] = 'Beam450GeV-VeloOpen-MagDown'
+    bkqd = BKQueryByMeta(condition='resonance=psip bossVer=655 expNum=exp2 streamId=stream002')
     data = bkqd.getDataset()
     """
     
@@ -175,6 +167,50 @@ class BDQueryByMeta(GangaObject):
            ds.files.append(logicalFile)
 
         
+        return GPIProxyObjectFactory(ds)
+
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
+
+class BDQueryByName(GangaObject):
+    """Class for handling Badger queries using name.
+
+    Example Usage:
+
+    bkqd = BKQueryByName(name='')
+    data = bkqd.getDataset()
+    """
+
+    schema = {}
+    docstr = 'Dirac badger dataset name.'
+    schema['name'] = SimpleItem(defvalue='', doc=docstr)
+    _schema = Schema(Version(1,0), schema)
+    _category = ''
+    _name = "BDQueryByName"
+    _exportmethods = ['getDataset']
+
+    def __init__(self):
+        super(BDQueryByName, self).__init__()
+
+    def __construct__(self, args):
+        if (len(args) != 1) or (type(args[0]) is not type({})):
+            super(BDQueryByName,self).__construct__(args)
+        else:
+            self.name = args[0]
+
+    def getDataset(self):
+        '''Gets the dataset from the bookkeeping for current dict.'''
+        if not self.name: return None
+        badger = Badger()
+        files = []
+        files = badger.getFilesByDatasetName(self.name)
+
+        ds = BesDataset()
+        for f in files:
+           logicalFile = "LFN:"+f
+           logger.error("zhangxm log: data files LFN: %s", f)
+           ds.files.append(logicalFile)
+
+
         return GPIProxyObjectFactory(ds)
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
