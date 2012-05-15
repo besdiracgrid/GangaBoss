@@ -14,10 +14,10 @@ from Ganga.GPIDev.Adapters.ISplitter import ISplitter, SplittingError
 from Ganga.Utility.util import unique 
 import Ganga.Utility.logging
 from GangaBoss.Lib.Dataset.DatasetUtils import *
+from GangaBoss.Lib.Dataset.BDRegister import BDRegister
 from Francesc import GaudiExtras
 from PythonOptionsParser import PythonOptionsParser
 from Ganga.Utility.Shell import Shell
-from DIRAC.Interfaces.API.Badger import Badger
 
 import MySQLdb
 logger = Ganga.Utility.logging.getLogger()
@@ -304,14 +304,12 @@ class BossSplitter(ISplitter):
         return subjobs
 
     def _createFcDir(self, job, eventType, streamId, resonance, expNum, bossVer):
-        badger = Badger()
         dataType = 'rtraw'
         if job.application.recoptsfile:
            dataType = 'dst'
-        metaDic = {'dataType': dataType, 'eventType': eventType, 'streamId': streamId, \
-                   'resonance': resonance, 'expNum': expNum,'bossVer': bossVer}
-        fcdir = badger.registerHierarchicalDir(metaDic)
-        logger.error("zhangxm log: create file catalog directory for later files registeration in FC!\n")
+        bdr = BDRegister(dataType, eventType, streamId, resonance, expNum, bossVer)
+        fcdir = bdr.createDir()
+        logger.error("zhangxm log: use BDRegister to create directory!\n")
         return fcdir
 
     def _createSubjob(self, job, runId, eventId, fileId, eventNum, rndmSeed, fcdir):
