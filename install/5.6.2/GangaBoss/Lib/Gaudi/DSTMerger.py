@@ -17,6 +17,7 @@ from Ganga.Utility.Config import makeConfig, ConfigError, getConfig
 from Ganga.Utility.Plugin import allPlugins
 from Ganga.Utility.logging import getLogger, log_user_exception
 from GangaBoss.Lib.Gaudi.CMTVersion import CMTVersion
+from GangaBoss.Lib.Dataset.BDRegister import BDRegister 
 
 logger = getLogger()
 
@@ -181,9 +182,6 @@ class DSTMerger(AbstractMerger):
     be done with care, as some opts are assumed when
     writing the files for output.
     
-    Comments and help requests should be sent to:
-    
-    lhcb-distributed-analysis@cern.ch
     """
     
     _category = 'mergers'
@@ -201,9 +199,20 @@ class DSTMerger(AbstractMerger):
     def merge(self, jobs, outputdir=None, ignorefailed=None, overwrite=None):
         self.merge_tool.merge_opts = self.merge_opts
         self.merge_tool.version = self.version
+        
+        logger.error("zhangxm log: begin to register file!\n")        
+       
+        # do file registering 
+        for sj in jobs:
+            if sj.status=='completed':
+               sj.application.register()
+
+        # do file registering with BDRegister
+        #bdr = BDRegister() 
+        #bdr.registerFile(jobs)   
+
         #needed as exportmethods doesn't seem to cope with inheritance
-        return super(DSTMerger,self).merge(jobs, outputdir, ignorefailed,
-                                           overwrite)
+        #return super(DSTMerger,self).merge(jobs, outputdir, ignorefailed,
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
