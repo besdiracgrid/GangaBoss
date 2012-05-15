@@ -197,7 +197,7 @@ class Francesc(IApplication):
     def register(self):
         """ register data file in File Catalog"""
         lfn = self.outputfile
-        logger.error('zhangxm log:  the options file: %s %d', lfn, self.runL)
+        logger.error('zhangxm log:  the options file: %s is registered with runId %d', lfn, self.runL)
         entryDict = {'runL':self.runL}
         badger = Badger()
         result = badger.registerFileMetadata(lfn,entryDict)
