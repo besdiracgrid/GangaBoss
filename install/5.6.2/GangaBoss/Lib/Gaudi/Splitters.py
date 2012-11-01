@@ -267,7 +267,7 @@ class BossSplitter(ISplitter):
             # CN: read round number from text file (contains run numbers
             # and corresponding exp / round numbers)
             # TODO: use absolute path to 'official' data file for this
-            expNum = self._getRoundNum("RoundSearch.txt", runFrom, runTo)
+            expNum = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
 
             sql, sftVer, parVer = self._generateSQL(bossRelease, runFrom, runTo)
 
