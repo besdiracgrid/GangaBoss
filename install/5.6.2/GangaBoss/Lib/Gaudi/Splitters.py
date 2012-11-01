@@ -212,14 +212,16 @@ class BossSplitter(ISplitter):
 
     def split(self,job):
         evtMaxPerJob = self.evtMaxPerJob
-        sftVer = "6.6.0"
         subjobs=[]
         rndmSeed = 0
+        dbuser = config["dbuser"]
+        dbpass = config["dbpass"]
+        dbhost = config["dbhost"]
         shell = self._getShell()
         optsfiles = [fileitem.name for fileitem in job.application.optsfile]
         parser = PythonOptionsParser(optsfiles,job.application.extraopts,shell) 
-        serial, runFrom, runTo = parser.get_run_range()
-        logger.error("zhangxm log: runFrom %d, runTo %d\n" % (runFrom, runTo))
+        runRangeBlocks = parser.get_run_range()
+
         evtMax = parser.get_EvtMax()
         outputFileName = parser.get_OutputFileName()
         head = '_'.join(outputFileName.split('_')[0:4])
@@ -227,74 +229,101 @@ class BossSplitter(ISplitter):
         resonance = outputFileName.split('_')[1]
         eventType = outputFileName.split('_')[2]
         streamId = outputFileName.split('_')[3]
-        expNum = 'exp2'
-        if serial: 
-           sql = 'select RunNo,OfflineTwoGam from OfflineLum where RunNo >= %d and RunNo <= %d && SftVer = "6.5.5";' % (runFrom, runTo)
-        else:
-           sql = 'select RunNo,OfflineTwoGam from OfflineLum where (RunNo = %d || RunNo = %d) && SftVer = "6.5.5";' % (runFrom, runTo)
-        logger.error("zhangxm log: sql %s\n" % sql)
-        dbuser = config["dbuser"]
-        dbpass = config["dbpass"]
-        dbhost = config["dbhost"]
-        #connection = MySQLdb.connect(user="guest", passwd="guestpass", host="bes3db2.ihep.ac.cn", db="offlinedb")
+
+        # CN: get Boss release from output file name, but in '.' format
+        bossVer_split = list(bossVer)
+        bossRelease = bossVer_split[0]+"."+bossVer_split[1]+"."+bossVer_split[2]
+
+        logger.debug("Boss release is %s" % bossRelease)
+
+        # get initial random seed from DB
         connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
         cursor = connection.cursor()
         sql_rndm = 'select MaxSeed from seed;'
         cursor.execute(sql_rndm)
-        for rowR in cursor.fetchall(): 
-            rndmSeed = rowR[0]
-        cursor.execute(sql)
+        # there is only one row in this table, so just fetch the first row
+        rndmSeed = cursor.fetchone()[0]
+
+        # CN: loop over all the run range 'blocks' to get total lumi
+        # Looping over all the run range blocks twice, very inefficient, can we do it better?
         lumAll = 0
-        for row in cursor.fetchall():
-            logger.error("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
-            lumAll = lumAll + row[1]
-        cursor.execute(sql)
-        cursor1 = connection.cursor()
-        logger.error('zhangxm log: parameters for file catalog: \
-                     eventType->%s, streamId->%s, resonance->%s, expNum->%s, bossVer->%s' \
-                     % (eventType, streamId, resonance, expNum, bossVer))
-        fcdir = self._createFcDir(job, eventType, streamId, resonance, expNum, bossVer)
-        for row in cursor.fetchall():
-            runId = row[0] 
-            lum = row[1]
-            sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-            print "sql: %s" % sql
-            if cursor1.execute(sql): 
-               for rowE in cursor1.fetchall():
-                   eventIdIni = rowE[0]
-                   print  "eventIdIni: %d" % eventIdIni
-            else:
-               eventIdIni = 0
-            currentNum = (lum/lumAll)*evtMax
-            logger.error("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
-            i = 0
-            if (currentNum-evtMaxPerJob) > 0 : 
-               ratio = currentNum/evtMaxPerJob
-               logger.error("zhangxm log: ratio %f\n" % (ratio))
-               for i in range(1, int(ratio)+1):
-                  eventId = eventIdIni+(i-1)*evtMaxPerJob
-                  fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
-                  rndmSeed = rndmSeed + 1
-                  subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
-                  subjobs.append(subjob)
-            logger.error("zhangxm log: i %d\n" % i)
-            eventId = eventIdIni+i*evtMaxPerJob
-            nextEventId = eventIdIni + currentNum
-            sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-            if cursor1.execute(sql):
-               sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
-               print "sql: %s" % sql
-            else:
-               sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
-               print "sql: %s" % sql
-            if cursor1.execute(sql):
-               print "OK!"
-            fileId = head + "_run%d_file000%d.rtraw" % (runId, i+1)
-            eventNum = currentNum - i*evtMaxPerJob
-            logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
-            rndmSeed = rndmSeed + 1
-            subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
-            subjobs.append(subjob)
+        for runRange in runRangeBlocks:
+            runFrom = runRange[0]
+            runTo = runRange[1]
+
+            sql = self._generateSQL(bossRelease, runFrom, runTo)[0]
+            connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
+            cursor = connection.cursor()
+            cursor.execute(sql)
+            for row in cursor.fetchall():
+                logger.error("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
+                lumAll = lumAll + row[1]
+
+        # CN: loop over all the run range blocks again to do the job splitting
+        for runRange in runRangeBlocks:
+            runFrom = runRange[0]
+            runTo = runRange[1]
+
+            # CN: read round number from text file (contains run numbers
+            # and corresponding exp / round numbers)
+            # TODO: use absolute path to 'official' data file for this
+            expNum = self._getRoundNum("RoundSearch.txt", runFrom, runTo)
+
+            sql, sftVer, parVer = self._generateSQL(bossRelease, runFrom, runTo)
+
+            connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
+            cursor = connection.cursor()
+            cursor.execute(sql)
+            cursor1 = connection.cursor()
+            logger.error('zhangxm log: parameters for file catalog: \
+                         eventType->%s, streamId->%s, resonance->%s, expNum->%s, bossVer->%s' \
+                         % (eventType, streamId, resonance, expNum, bossVer))
+            fcdir = self._createFcDir(job, eventType, streamId, resonance, expNum, bossVer)
+            for row in cursor.fetchall():
+                runId = row[0] 
+                lum = row[1]
+                sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+                print "sql: %s" % sql
+                if cursor1.execute(sql): 
+                    for rowE in cursor1.fetchall():
+                        eventIdIni = rowE[0]
+                        print  "eventIdIni: %d" % eventIdIni
+                else:
+                    eventIdIni = 0
+                currentNum = (lum/lumAll)*evtMax
+                logger.error("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
+                i = 0
+                if (currentNum-evtMaxPerJob) > 0 : 
+                    ratio = currentNum/evtMaxPerJob
+                    logger.error("zhangxm log: ratio %f\n" % (ratio))
+                    for i in range(1, int(ratio)+1):
+                        eventId = eventIdIni+(i-1)*evtMaxPerJob
+                        fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
+                        rndmSeed = rndmSeed + 1
+                        subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
+                        subjobs.append(subjob)
+                logger.error("zhangxm log: i %d\n" % i)
+                eventId = eventIdIni+i*evtMaxPerJob
+                nextEventId = eventIdIni + currentNum
+                sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+                if cursor1.execute(sql):
+                    sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
+                    print "sql: %s" % sql
+                else:
+                    sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
+                    print "sql: %s" % sql
+                if cursor1.execute(sql):
+                    print "OK!"
+                fileId = head + "_run%d_file000%d.rtraw" % (runId, i+1)
+                eventNum = currentNum - i*evtMaxPerJob
+                logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
+                rndmSeed = rndmSeed + 1
+                subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
+                subjobs.append(subjob)
+            # end of for loop over entries returned by SQL query
+        # end of for loop over all run range blocks
+
+
         sql_rndm = 'update seed set MaxSeed = %d;' % rndmSeed
         cursor1.execute(sql_rndm)
         connection.commit()
@@ -356,5 +385,50 @@ class BossSplitter(ISplitter):
 
         shell = Shell(setup=fd.name)
         return shell 
+
+    def _getRoundNum(self, infoFile, runL, runH):
+        f = open(infoFile, 'r')
+        allLines = f.readlines()
+        f.close()
+
+        roundNum = ""
+        for line in allLines:
+            data = line.strip()
+            items = data.split(',')
+            file_runL = string.atoi(items[0])
+            file_runH = string.atoi(items[1])
+                                     
+            if runL >= file_runL and runH <= file_runH:
+                roundNum = string.lower(items[6])
+
+        return roundNum
+        
+    def _generateSQL(self, bossRelease, runFrom, runTo):
+
+        dbhost = config["dbhost"]
+
+        # CN: TODO: when db admin gives 'production' user permissions for CalVtxLumVer
+        # table, change these back to config version instead of hard-coding guest user
+        guest_connection = MySQLdb.connect(user="guest", passwd="guestpass", host=dbhost, db="offlinedb")
+
+        # CN: get SftVer and ParVer for this run range
+        sql = 'select SftVer, ParVer from CalVtxLumVer where BossRelease = "%s" and RunFrom <= %d and RunTo >= %d and DataType = "LumVtx";' % (bossRelease, runFrom, runTo)
+        sftVer = ""
+        parVer = ""
+        guest_cursor = guest_connection.cursor()
+        guest_cursor.execute(sql)
+        for row in guest_cursor.fetchall():
+            sftVer = row[0]
+            parVer = row[1]
+
+        # CN: generate SQL query to get RunNo and luminosity for this run range
+        sql = 'select RunNo,OfflineTwoGam from OfflineLum where RunNo >= %d and RunNo <= %d && SftVer = "%s" and ParVer = "%s";' % (runFrom, runTo, sftVer, parVer)
+
+        guest_cursor.close()
+        guest_connection.close()
+
+        return sql, sftVer, parVer
+
+
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
                                                                                          

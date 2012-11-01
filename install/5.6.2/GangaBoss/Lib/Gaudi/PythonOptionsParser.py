@@ -135,27 +135,36 @@ class PythonOptionsParser:
     def get_run_range( self):
         '''Collects run range'''
         runs = []
-        runFrom = 0
-        runTo = 0
+        runRange = []
+
         try:
             runs = [run for run in self.opts_dict['RealizationSvc']['RunIdList']]
         except KeyError, e:
             logger.debug('No RunIdList has been defined in the options file.')
 
-        for run in runs:
-           if run == 0: serial = True
-        if serial: 
-           runFrom = abs(runs[0])
-           #runFrom = 8093 
-           runTo = abs(runs[2])
-           #runTo = 8094
-           logger.error("zhangxm log: runFrom, %d, runTo, %d" % (runFrom, runTo))
-        else:
-           runFrom = abs(runs[0])
-           runTo = abs(runs[1])
-           #runFrom = 8093
-           #runTo = 8094
-        return serial, runFrom, runTo
+        # CN: for each element in the list, check whether the next element is a 0. 
+        # if no, add just that run number to the run range 'tuple' 
+        # if yes, add that run number, the zero and the following one to the tuple
+        # as a run range. then jump to the next element.
+
+        i = 0
+        while i < len(runs):
+            if i < len(runs)-1:
+                if runs[i+1] == 0:
+                    # this is a run range rather than single run
+                    runRange.append((abs(runs[i]), abs(runs[i+2])))
+                    i = i+3
+                else:
+                    # this is just a single run
+                    runRange.append((abs(runs[i]), abs(runs[i])))
+                    i = i+1
+            else:
+                # last element in the list, so this is just a single run
+                runRange.append((abs(runs[i]), abs(runs[i])))
+                i = i+1
+            
+
+        return runRange
 
     def get_EvtMax( self):
         '''Get Max Event number and Max Event number Per File'''
