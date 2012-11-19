@@ -257,7 +257,9 @@ class BossSplitter(ISplitter):
             cursor.execute(sql)
             for row in cursor.fetchall():
                 logger.error("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
-                lumAll = lumAll + row[1]
+                #CN: check that lumi > 0 
+                if row[1] > 0:
+                    lumAll = lumAll + row[1]
 
         # CN: loop over all the run range blocks again to do the job splitting
         for runRange in runRangeBlocks:
@@ -267,7 +269,7 @@ class BossSplitter(ISplitter):
             # CN: read round number from text file (contains run numbers
             # and corresponding exp / round numbers)
             # TODO: use absolute path to 'official' data file for this
-            expNum = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
+            expNum = self._getRoundNum("RoundSearch.txt", runFrom, runTo)
 
             sql, sftVer, parVer = self._generateSQL(bossRelease, runFrom, runTo)
 
@@ -281,45 +283,47 @@ class BossSplitter(ISplitter):
             fcdir = self._createFcDir(job, eventType, streamId, resonance, expNum, bossVer)
             for row in cursor.fetchall():
                 runId = row[0] 
-                lum = row[1]
-                sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-                print "sql: %s" % sql
-                if cursor1.execute(sql): 
-                    for rowE in cursor1.fetchall():
-                        eventIdIni = rowE[0]
-                        print  "eventIdIni: %d" % eventIdIni
-                else:
-                    eventIdIni = 0
-                currentNum = (lum/lumAll)*evtMax
-                logger.error("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
-                i = 0
-                if (currentNum-evtMaxPerJob) > 0 : 
-                    ratio = currentNum/evtMaxPerJob
-                    logger.error("zhangxm log: ratio %f\n" % (ratio))
-                    for i in range(1, int(ratio)+1):
-                        eventId = eventIdIni+(i-1)*evtMaxPerJob
-                        fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
-                        rndmSeed = rndmSeed + 1
-                        subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
-                        subjobs.append(subjob)
-                logger.error("zhangxm log: i %d\n" % i)
-                eventId = eventIdIni+i*evtMaxPerJob
-                nextEventId = eventIdIni + currentNum
-                sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-                if cursor1.execute(sql):
-                    sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
+                #CN: check that lumi > 0 
+                if row[1] > 0:
+                    lum = row[1]
+                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
                     print "sql: %s" % sql
-                else:
-                    sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
-                    print "sql: %s" % sql
-                if cursor1.execute(sql):
-                    print "OK!"
-                fileId = head + "_run%d_file000%d.rtraw" % (runId, i+1)
-                eventNum = currentNum - i*evtMaxPerJob
-                logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
-                rndmSeed = rndmSeed + 1
-                subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
-                subjobs.append(subjob)
+                    if cursor1.execute(sql): 
+                        for rowE in cursor1.fetchall():
+                            eventIdIni = rowE[0]
+                            print  "eventIdIni: %d" % eventIdIni
+                    else:
+                        eventIdIni = 0
+                    currentNum = (lum/lumAll)*evtMax
+                    logger.error("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
+                    i = 0
+                    if (currentNum-evtMaxPerJob) > 0 : 
+                        ratio = currentNum/evtMaxPerJob
+                        logger.error("zhangxm log: ratio %f\n" % (ratio))
+                        for i in range(1, int(ratio)+1):
+                            eventId = eventIdIni+(i-1)*evtMaxPerJob
+                            fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
+                            rndmSeed = rndmSeed + 1
+                            subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
+                            subjobs.append(subjob)
+                    logger.error("zhangxm log: i %d\n" % i)
+                    eventId = eventIdIni+i*evtMaxPerJob
+                    nextEventId = eventIdIni + currentNum
+                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+                    if cursor1.execute(sql):
+                        sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
+                        print "sql: %s" % sql
+                    else:
+                        sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
+                        print "sql: %s" % sql
+                    if cursor1.execute(sql):
+                        print "OK!"
+                    fileId = head + "_run%d_file000%d.rtraw" % (runId, i+1)
+                    eventNum = currentNum - i*evtMaxPerJob
+                    logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
+                    rndmSeed = rndmSeed + 1
+                    subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
+                    subjobs.append(subjob)
             # end of for loop over entries returned by SQL query
         # end of for loop over all run range blocks
 
