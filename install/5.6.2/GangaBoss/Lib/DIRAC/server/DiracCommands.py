@@ -4,6 +4,8 @@ import os
 import time
 import datetime
 import glob
+from DIRAC.Core.Base import Script
+Script.parseCommandLine( ignoreErrors = True )
 from DIRAC.Interfaces.API.Dirac import *
 from DIRAC.Interfaces.API.Job import *
 from DIRAC.Interfaces.API.DiracAdmin import DiracAdmin
