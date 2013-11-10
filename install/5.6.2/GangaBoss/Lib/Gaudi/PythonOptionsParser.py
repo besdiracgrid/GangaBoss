@@ -105,7 +105,7 @@ class PythonOptionsParser:
         '''Create a single options file from all supplied options.'''
         joined_py_opts = ''
         for name in self.optsfiles:
-            logger.error('zhangxm log:  the options file: %s', name)
+            logger.debug('zhangxm log:  the options file: %s', name)
             try:
                 file = open( expandfilename(name),'r')
                 import os.path
@@ -126,9 +126,9 @@ class PythonOptionsParser:
                              name)
                     
         if self.extraopts:
-            logger.error("zhangxm log: extraopts : %s", self.extraopts)
+            logger.debug("zhangxm log: extraopts : %s", self.extraopts)
             joined_py_opts += self.extraopts
-            logger.error("zhangxm log: joined_py_opts : %s", joined_py_opts)
+            logger.debug("zhangxm log: joined_py_opts : %s", joined_py_opts)
 
         return joined_py_opts
 

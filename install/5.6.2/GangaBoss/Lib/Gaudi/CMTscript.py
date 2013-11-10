@@ -78,9 +78,9 @@ def CMTscript(app,command=''):
    #script+= '%s %s %s %s\n' % (use,setupProjectOptions,appname,app.version)
    #script+= '%s %s\n' % (use,setupProjectOptions)
    command=command.replace('###CMT###',cmtcmd + ' ' + cmtoption)
-   logger.error('zhangxm log: Will execute the command: '+command)
+   logger.debug('zhangxm log: Will execute the command: '+command)
    script += command + '\n'
-   logger.error('zhangxm log: The full script for execution:\n'+script)
+   logger.debug('zhangxm log: The full script for execution:\n'+script)
 
    # write file
    try:

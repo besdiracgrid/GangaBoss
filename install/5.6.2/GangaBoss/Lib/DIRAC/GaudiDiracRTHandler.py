@@ -40,6 +40,7 @@ if __name__ == '__main__':
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 def boss_env_wrapper():   
     return """#!/bin/bash
+echo "Node name: `uname -n`"
 export CURDIR=`pwd`
 ls -al 
 export BESROOT=/cvmfs/boss.cern.ch
@@ -61,9 +62,25 @@ source setup.sh
 cd $CURDIR/
 gaudirun.py -n -v -o options.opts options.pkl data.py
 boss.exe  options.opts
+result=$?
+if [ $result != 0 ]; then 
+   echo 'ERROR: boss.exe on simulation job failed'
+   exit $result
+fi
+gaudirun.py -n -o options.py options.pkl data.py
+rawfile=`python -c "print eval(open('options.py').read())['RootCnvSvc']['digiRootOutputFile']"`
+if [ ! -f $rawfile ]; then
+   echo "ERROR: $rawfile not generated"
+   exit 2
+fi
 if [ -f "recoptions.pkl" ]; then
    gaudirun.py -n -v -o recoptions.opts recoptions.pkl recdata.py
    boss.exe recoptions.opts
+   result=$?
+   if [ $result != 0 ]; then
+      echo 'ERROR: boss.exe on reconstruction job failed'
+      exit $result
+   fi
 fi
 """
 

@@ -3,7 +3,7 @@ from Ganga.GPIDev.Base import GangaObject
 from LogicalFile import *
 from BesDataset import *
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
-from DIRAC.Interfaces.API.Badger import Badger
+from BESDIRAC.Badger.API.Badger import Badger
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
@@ -163,7 +163,7 @@ class BDQueryByMeta(GangaObject):
         ds = BesDataset()
         for f in files: 
            logicalFile = "LFN:"+f  
-           logger.error("zhangxm log: data files LFN: %s", f)
+           logger.debug("zhangxm log: data files LFN: %s", f)
            ds.files.append(logicalFile)
 
         
@@ -207,7 +207,7 @@ class BDQueryByName(GangaObject):
         ds = BesDataset()
         for f in files:
            logicalFile = "LFN:"+f
-           logger.error("zhangxm log: data files LFN: %s", f)
+           logger.debug("zhangxm log: data files LFN: %s", f)
            ds.files.append(logicalFile)
 
 

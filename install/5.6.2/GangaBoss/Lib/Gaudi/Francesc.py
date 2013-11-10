@@ -13,7 +13,7 @@ from GangaBoss.Lib.Dataset.BesDataset import BesDataset
 from GangaBoss.Lib.Dataset.OutputData import OutputData
 from GaudiUtils import *
 from Ganga.GPIDev.Lib.File import File
-from DIRAC.Interfaces.API.Badger import Badger
+from BESDIRAC.Badger.API.Badger import Badger
 from Ganga.Core import ApplicationConfigurationError
 import Ganga.Utility.Config
 
@@ -124,7 +124,7 @@ class Francesc(IApplication):
         script += '%s \n' % cmd
         fd.write(script)
         fd.flush()
-        logger.error("zhangxm log: run boss env script:\n%s" % script)
+        logger.debug("zhangxm log: run boss env script:\n%s" % script)
 
         self.shell = Shell(setup=fd.name)
         #logger.error(pprint.pformat(self.shell.env))
@@ -197,7 +197,7 @@ class Francesc(IApplication):
     def register(self):
         """ register data file in File Catalog"""
         lfn = self.outputfile
-        logger.error('zhangxm log:  the options file: %s is registered with runId %d', lfn, self.runL)
+        logger.debug('zhangxm log:  the options file: %s is registered with runId %d', lfn, self.runL)
         entryDict = {'runL':self.runL}
         badger = Badger()
         result = badger.registerFileMetadata(lfn,entryDict)
@@ -245,7 +245,7 @@ class Francesc(IApplication):
            self.extra.input_buffers['data.opts'] += txt_str
            data_str = '\nfrom Gaudi.Configuration import * \n'
            data_str += 'importOptions("data.opts")\n'
-           logger.error("zhangxm log: data files: %s", data_str)
+           logger.debug("zhangxm log: data files: %s", data_str)
         self.extra.input_buffers['data.py'] += data_str
 
 

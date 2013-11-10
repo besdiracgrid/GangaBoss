@@ -200,7 +200,7 @@ class DSTMerger(AbstractMerger):
         self.merge_tool.merge_opts = self.merge_opts
         self.merge_tool.version = self.version
         
-        logger.error("zhangxm log: begin to register file!\n")        
+        logger.debug("zhangxm log: begin to register file!\n")        
        
         # do file registering 
         for sj in jobs:

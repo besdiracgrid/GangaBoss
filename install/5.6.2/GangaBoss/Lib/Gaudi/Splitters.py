@@ -256,7 +256,7 @@ class BossSplitter(ISplitter):
             cursor = connection.cursor()
             cursor.execute(sql)
             for row in cursor.fetchall():
-                logger.error("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
+                logger.debug("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
                 #CN: check that lumi > 0 
                 if row[1] > 0:
                     lumAll = lumAll + row[1]
@@ -269,7 +269,7 @@ class BossSplitter(ISplitter):
             # CN: read round number from text file (contains run numbers
             # and corresponding exp / round numbers)
             # TODO: use absolute path to 'official' data file for this
-            expNum = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
+            round = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
 
             sql, sftVer, parVer = self._generateSQL(bossRelease, runFrom, runTo)
 
@@ -277,50 +277,50 @@ class BossSplitter(ISplitter):
             cursor = connection.cursor()
             cursor.execute(sql)
             cursor1 = connection.cursor()
-            logger.error('zhangxm log: parameters for file catalog: \
-                         eventType->%s, streamId->%s, resonance->%s, expNum->%s, bossVer->%s' \
-                         % (eventType, streamId, resonance, expNum, bossVer))
-            fcdir = self._createFcDir(job, eventType, streamId, resonance, expNum, bossVer)
+            logger.debug('zhangxm log: parameters for file catalog: \
+                         eventType->%s, streamId->%s, resonance->%s, round->%s, bossVer->%s' \
+                         % (eventType, streamId, resonance, round, bossVer))
+            fcdir = self._createFcDir(job, eventType, streamId, resonance, round, bossVer)
             for row in cursor.fetchall():
                 runId = row[0] 
                 #CN: check that lumi > 0 
                 if row[1] > 0:
                     lum = row[1]
                     sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-                    print "sql: %s" % sql
+                    logger.debug("sql: %s" % sql)
                     if cursor1.execute(sql): 
                         for rowE in cursor1.fetchall():
                             eventIdIni = rowE[0]
-                            print  "eventIdIni: %d" % eventIdIni
+                            logger.debug("eventIdIni: %d" % eventIdIni)
                     else:
                         eventIdIni = 0
                     currentNum = (lum/lumAll)*evtMax
-                    logger.error("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
+                    logger.debug("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
                     i = 0
                     if (currentNum-evtMaxPerJob) > 0 : 
                         ratio = currentNum/evtMaxPerJob
-                        logger.error("zhangxm log: ratio %f\n" % (ratio))
+                        logger.debug("zhangxm log: ratio %f\n" % (ratio))
                         for i in range(1, int(ratio)+1):
                             eventId = eventIdIni+(i-1)*evtMaxPerJob
-                            fileId = head + "_run%d_file000%d.rtraw" % (runId, i)
+                            fileId = head + "_run%d_file%04d.rtraw" % (runId, i)
                             rndmSeed = rndmSeed + 1
                             subjob = self._createSubjob(job, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
                             subjobs.append(subjob)
-                    logger.error("zhangxm log: i %d\n" % i)
+                    logger.debug("zhangxm log: i %d\n" % i)
                     eventId = eventIdIni+i*evtMaxPerJob
                     nextEventId = eventIdIni + currentNum
                     sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
                     if cursor1.execute(sql):
                         sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
-                        print "sql: %s" % sql
+                        logger.debug("sql: %s" % sql)
                     else:
                         sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
-                        print "sql: %s" % sql
+                        logger.debug("sql: %s" % sql)
                     if cursor1.execute(sql):
-                        print "OK!"
-                    fileId = head + "_run%d_file000%d.rtraw" % (runId, i+1)
+                        logger.debug("OK!")
+                    fileId = head + "_run%d_file%04d.rtraw" % (runId, i+1)
                     eventNum = currentNum - i*evtMaxPerJob
-                    logger.error("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
+                    logger.debug("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
                     rndmSeed = rndmSeed + 1
                     subjob = self._createSubjob(job, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
                     subjobs.append(subjob)
@@ -336,13 +336,13 @@ class BossSplitter(ISplitter):
         connection.close()
         return subjobs
 
-    def _createFcDir(self, job, eventType, streamId, resonance, expNum, bossVer):
+    def _createFcDir(self, job, eventType, streamId, resonance, round, bossVer):
         dataType = 'rtraw'
         if job.application.recoptsfile:
            dataType = 'dst'
-        bdr = BDRegister(dataType, eventType, streamId, resonance, expNum, bossVer)
+        bdr = BDRegister(dataType, eventType, streamId, resonance, round, bossVer)
         fcdir = bdr.createDir()
-        logger.error("zhangxm log: use BDRegister to create directory!\n")
+        logger.debug("zhangxm log: use BDRegister to create directory!\n")
         return fcdir
 
     def _createSubjob(self, job, runId, eventId, fileId, eventNum, rndmSeed, fcdir):
@@ -354,7 +354,7 @@ class BossSplitter(ISplitter):
         sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % fileId
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
         sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        logger.error("zhangxm log: data.opts_sopts:%s", sopts)
+        logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
         j.application.extra.input_buffers['data.opts'] += sopts
         j.application.extra.input_buffers['data.py'] += opts
         j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + fileId
@@ -369,7 +369,7 @@ class BossSplitter(ISplitter):
            sopts += 'EventCnvSvc.digiRootoutputFile = "%s";\n' % recfileId
            sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
            sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-           logger.error("zhangxm log: data.opts:%s", sopts)
+           logger.debug("zhangxm log: data.opts:%s", sopts)
            j.application.extra.input_buffers['recdata.opts'] += sopts
            j.application.extra.input_buffers['recdata.py'] += opts
            j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + recfileId
@@ -385,7 +385,7 @@ class BossSplitter(ISplitter):
         script += '%s \n' % cmd
         fd.write(script)
         fd.flush()
-        logger.error("zhangxm log: run boss env script:\n%s" % script)
+        logger.debug("zhangxm log: run boss env script:\n%s" % script)
 
         shell = Shell(setup=fd.name)
         return shell 
@@ -403,7 +403,7 @@ class BossSplitter(ISplitter):
             file_runH = string.atoi(items[1])
                                      
             if runL >= file_runL and runH <= file_runH:
-                roundNum = string.lower(items[6])
+                roundNum = string.lower(items[5])
 
         return roundNum
         
