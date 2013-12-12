@@ -44,8 +44,8 @@ defval = "production"
 configBoss.addOption('dbuser',defval,dscrpt)
 defval = "bes3mc"
 configBoss.addOption('dbpass',defval,dscrpt)
-#defval = "bes3db2.ihep.ac.cn"
-defval = "202.122.37.69"
+defval = "bes3db1.ihep.ac.cn"
+#defval = "202.122.33.121"
 configBoss.addOption('dbhost',defval,dscrpt)
 
 

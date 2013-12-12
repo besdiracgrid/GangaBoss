@@ -25,32 +25,17 @@ RecoToDST-07/90000000/DST" ,
 
     '''
     schema = {}
-    docstr = 'data type'
-    schema['dataType'] = SimpleItem(defvalue='' ,doc=docstr)
-    docstr = 'event type'
-    schema['eventType'] = SimpleItem(defvalue='' ,doc=docstr)
-    docstr = 'stream ID'
-    schema['streamId'] = SimpleItem(defvalue='' ,doc=docstr)
-    docstr = 'resonance'
-    schema['resonance'] = SimpleItem(defvalue='' ,doc=docstr)
-    docstr = 'experiment number'
-    schema['round'] = SimpleItem(defvalue='',doc=docstr)
-    docstr = 'boss version'
-    schema['bossVer'] = SimpleItem(defvalue='Path',doc=docstr)
+    docstr = 'Metadata'
+    schema['metadata'] = SimpleItem(defvalue={}, doc=docstr)
     _schema = Schema(Version(1,2), schema)
     _category = ''
     _name = "BDRegister"
     _exportmethods = ['createDir', 'registerFile']
 
-    def __init__(self, dataType='', eventType='',streamId='', resonance='',round='', bossVer=''):
+    def __init__(self, metadata):
         super(BDRegister, self).__init__()
         self.badger = Badger()
-        self.dataType = dataType
-        self.eventType = eventType
-        self.streamId = streamId
-        self.resonance = resonance
-        self.round = round
-        self.bossVer = bossVer
+        self.metadata = metadata
 
     def __construct__(self, args):
         if (len(args) != 1) or (type(args[0]) is not type('')):
@@ -85,13 +70,26 @@ RecoToDST-07/90000000/DST" ,
         if not result['Value']['Successful']:
             fc.createDirectory(basePath)
 
-    def createDir(self):
+    def createDir(self,userType = 'official'):
         '''create directory for the dataset'''
-        metaDic = {'dataType': self.dataType, 'eventType': self.eventType, 'streamId': self.streamId, \
-                'resonance': self.resonance, 'round': self.round,'bossVer': self.bossVer}
-        rootDir = self.__getUserDir() #yant add
-        self.__checkUserDir(rootDir) #yant add
-        fcdir = self.badger.registerHierarchicalDir(metaDic,rootDir)
+        metaDic = {}
+        metaDic['bossVer']     = self.metadata.get('bossVer',     'x.x.x')
+        metaDic['resonance']   = self.metadata.get('resonance',   'unknown')
+        metaDic['dataType']    = self.metadata.get('dataType',    'unknown')
+        metaDic['eventType']   = self.metadata.get('eventType',   'unknown')
+        metaDic['round']       = self.metadata.get('round',       'roundxx')
+        metaDic['streamId']    = self.metadata.get('streamId',    'streamxxx')
+        metaDic['jobGroup']    = self.metadata.get('jobGroup',    '')
+        metaDic['runL']        = self.metadata.get('runL',        0)
+        metaDic['runH']        = self.metadata.get('runH',        0)
+        metaDic['submitTime']  = self.metadata.get('submitTime',  '1970-01-01 08:00:00')
+
+        if userType == 'official':
+            fcdir = self.badger.registerHierarchicalDir(metaDic)
+        else:
+            rootDir = self.__getUserDir() #yant add
+            self.__checkUserDir(rootDir) #yant add
+            fcdir = self.badger.registerHierarchicalDir(metaDic,rootDir)
         logger.debug("zhangxm log: create file catalog directory for later files registeration in FC!\n")
         return fcdir
 

@@ -103,6 +103,7 @@ class DiracScript:
         self.outputdata = None
         self.dirac_opts = None
         self.platform = None
+        self.type = None
 
     def write(self,file_name):
         contents = '# dirac job created by ganga \n'
@@ -110,8 +111,8 @@ class DiracScript:
         contents += 'dirac = Dirac()\n'
         contents += '\n# default commands added by ganga\n'
         if self.name: contents += 'j.setName("%s")\n' % self.name
-        contents += 'j.setType("")\n'
-        #if self.type: contents += 'j.setType("%s")\n' % self.type
+#        contents += 'j.setType("")\n'
+        if self.type: contents += 'j.setType("%s")\n' % self.type
         if self.input_sandbox:
             contents += "j.setInputSandbox(%s)\n" % str(self.input_sandbox)
         if self.output_sandbox:

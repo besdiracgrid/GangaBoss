@@ -1,4 +1,3 @@
-#!/bin/tcsh
-setenv GANGADIRACENVIRONMENT /afs/ihep.ac.cn/bes3/bvrs/ganga/diracenv 
-setenv GAUDIRUNENV /afs/ihep.ac.cn/bes3/bvrs/ganga/gaudirunenv 
-source /afs/ihep.ac.cn/bes3/bvrs/ganga/gaudirunenv.csh 
+setenv GANGADIRACENVIRONMENT $ganga_INSTALL_PATH/setup/diracenv
+setenv GAUDIRUNENV $ganga_INSTALL_PATH/setup/gaudirunenv 
+source $ganga_INSTALL_PATH/setup/gaudirunenv.csh

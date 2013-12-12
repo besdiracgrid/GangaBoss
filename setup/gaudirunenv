@@ -1,2 +1,1 @@
-#!/bin/bash
-export PYTHONPATH=/afs/ihep.ac.cn/bes3/bvrs/ganga/Ganga/install/5.6.2/python/gaudirun:$PYTHONPATH
+export PYTHONPATH=$ganga_INSTALL_PATH/install/5.6.2/python/gaudirun:$PYTHONPATH
