@@ -6,7 +6,6 @@ import tempfile, fnmatch
 from Ganga.GPIDev.Lib.File import FileBuffer
 import Ganga.Utility.logging
 from Ganga.Utility.util import unique
-import Ganga.Utility.Config 
 from GangaBoss.Lib.Dataset import *
 from Ganga.Core import ApplicationConfigurationError
 from Ganga.Utility.files import expandfilename
@@ -299,5 +298,10 @@ class PythonOptionsParser:
         outputdata += gaudi_outputdata
 
         return unique(outsandbox), unique(outputdata)
+
+    def get_decay_card(self):
+        '''Get the decay card name'''
+        if self.opts_dict.has_key('EvtDecay') and self.opts_dict['EvtDecay'].has_key('userDecayTableName'):
+            return self.opts_dict['EvtDecay']['userDecayTableName']
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#

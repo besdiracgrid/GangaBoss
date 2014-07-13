@@ -1,6 +1,7 @@
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 '''Application handler for Gaudi applications in Boss.'''
 import os
+import re
 import tempfile
 import gzip
 from Ganga.GPIDev.Schema import *
@@ -10,6 +11,7 @@ from GaudiUtils import *
 from GaudiRunTimeHandler import * 
 from PythonOptionsParser import PythonOptionsParser
 from Francesc import *
+from GangaBoss.Lib.Dataset.BDRegister import BDRegister
 from Ganga.Utility.util import unique
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 from Ganga.Utility.Shell import Shell
@@ -59,7 +61,7 @@ class Gaudi(Francesc):
     _name = 'Gaudi'
     __doc__ = GaudiDocString(_name)
     _category = 'applications'
-    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register']
+    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register', 'add_output_dir', 'get_output_dir', 'add_dataset_name', 'get_dataset_name']
 
     schema = get_common_gaudi_schema()
     docstr = 'The name of the optionsfile. Import statements in the file ' \
@@ -81,7 +83,13 @@ class Gaudi(Francesc):
              'using triple quotes around a multiline string.'
     schema['extraopts'] = SimpleItem(defvalue=None,
                                      typelist=['str','type(None)'],doc=docstr) 
+    docstr = 'User metadata'
+    schema['metadata'] = SimpleItem(defvalue={},doc=docstr) 
     _schema = Schema(Version(2, 1), schema)
+    docstr = 'Long idle job'
+    schema['longIdle'] = SimpleItem(defvalue=False,doc=docstr)
+    docstr = 'Create dataset'
+    schema['createDataset'] = SimpleItem(defvalue=True,doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -91,6 +99,7 @@ class Gaudi(Francesc):
        
             
     def master_configure(self):
+        self._validate_version()
 
         job = self.getJobObject()
         self._master_configure()
@@ -99,7 +108,8 @@ class Gaudi(Francesc):
         recoptsfiles = [fileitem.name for fileitem in self.recoptsfile]
         try:
             parser = PythonOptionsParser(optsfiles,self.extraopts,self.shell)
-            recparser = PythonOptionsParser(recoptsfiles,self.extraopts,self.shell)
+            if recoptsfiles:
+                recparser = PythonOptionsParser(recoptsfiles,self.extraopts,self.shell)
         except ApplicationConfigurationError, e:
             debug_dir = job.getDebugWorkspace().getPath()
             f = open(debug_dir + '/gaudirun.stdout','w')
@@ -113,15 +123,16 @@ class Gaudi(Francesc):
             raise ApplicationConfigurationError(None,msg)
 
         self.extra.master_input_buffers['options.pkl'] = parser.opts_pkl_str
-        self.extra.master_input_buffers['recoptions.pkl'] = recparser.opts_pkl_str
         script = "%s/options.pkl" % job.getInputWorkspace().getPath()
-        recscript = "%s/recoptions.pkl" % job.getInputWorkspace().getPath()
         file_pkl=open(script,'w')
-        file_recpkl=open(recscript,'w')
         file_pkl.write(parser.opts_pkl_str)
-        file_recpkl.write(recparser.opts_pkl_str)
         file_pkl.close()
-        file_recpkl.close()
+        if recoptsfiles:
+            self.extra.master_input_buffers['recoptions.pkl'] = recparser.opts_pkl_str
+            recscript = "%s/recoptions.pkl" % job.getInputWorkspace().getPath()
+            file_recpkl=open(recscript,'w')
+            file_recpkl.write(recparser.opts_pkl_str)
+            file_recpkl.close()
         inputdata = parser.get_input_data()
   
         # If user specified a dataset, ignore optsfile data but warn the user.
@@ -142,6 +153,9 @@ class Gaudi(Francesc):
         self.extra.outputdata.files += outputdata
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
+        self._validate_input()
+        self._prepare_metadata(parser, recoptsfiles)
+
         # write env into input dir
         input_dir = job.getInputWorkspace().getPath()
         file = gzip.GzipFile(input_dir + '/gaudi-env.py.gz','wb')
@@ -153,6 +167,63 @@ class Gaudi(Francesc):
     def configure(self,master_appconfig):
         self._configure()
         return (None,self.extra)
+
+    _output_dir = []
+
+    def add_output_dir(self,outputdir):
+        Gaudi._output_dir.append(outputdir)
+
+    def get_output_dir(self):
+        return Gaudi._output_dir
+
+    _dataset_name = []
+
+    def add_dataset_name(self,dataset_name):
+        Gaudi._dataset_name.append(dataset_name)
+
+    def get_dataset_name(self):
+        return Gaudi._dataset_name
+
+    def _validate_version(self):
+        if not re.match('^\d+\.\d+\.\d+(\.p\d+)?$', self.version):
+            msg = 'The BOSS version format is not correct: %s. It should be like "6.6.3" or "6.6.4.p01"' % self.version
+            raise ApplicationConfigurationError(None,msg)
+
+    def _validate_input(self):
+        if self.metadata.has_key('streamId') and not re.match('^stream(?!0+$)\d+$', self.metadata['streamId']):
+            msg = 'The streamId format is not correct: %s. It should be like "stream001" but can not be "stream000"' % self.metadata['streamId']
+            raise ApplicationConfigurationError(None,msg)
+
+    def _prepare_metadata(self, parser, recoptsfiles):
+        # deal with some metadata
+        self.extra.metadata = self.metadata.copy()
+        self.extra.metadata['bossVer'] = self.version.replace('.', '')
+#        self.extra.metadata['round'] = parser.get_round_num()  # the round could vary with different runs
+        self.extra.metadata['dataType'] = 'dst' if recoptsfiles else 'rtraw'
+
+        # the joboption and decay card
+        self.extra.run_ranges = parser.get_run_range()
+
+        # the main round
+        self.extra.metadata['round'] = get_round_nums(self.extra.run_ranges)[0]
+
+        # automatically get the stream ID
+        if not self.extra.metadata.has_key('streamId'):
+            bdr = BDRegister(self.extra.metadata)
+            self.extra.metadata['streamId'] = bdr.getUnusedStream()
+
+        # the joboption and decay card
+        if self.optsfile:
+            f = open(self.optsfile[0].name)
+            self.extra.metadata['jobOptions'] = f.read()
+            f.close()
+            decaycard = parser.get_decay_card()
+            if decaycard:
+                decaycard_path = decaycard if decaycard.startswith('/') else os.path.join(os.path.dirname(self.optsfile[0].name), decaycard)
+                f = open(decaycard_path)
+                self.extra.metadata['decayCard'] = f.read()
+                f.close()
+                self.extra.master_input_buffers[decaycard] = self.extra.metadata['decayCard']
 
     def _check_inputs(self):
         """Checks the validity of some of user's entries for Gaudi schema"""
@@ -242,7 +313,7 @@ class ###CLASS###(Gaudi):
     _name = '###CLASS###'
     __doc__ = GaudiDocString(_name)
     _schema = myschema.inherit_copy()
-    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register']
+    _exportmethods = ['getenv','getpack', 'make', 'cmt', 'register', 'add_output_dir', 'get_output_dir', 'add_dataset_name', 'get_dataset_name']
 
     def __init__(self):
         super(###CLASS###, self).__init__()
@@ -264,7 +335,19 @@ class ###CLASS###(Gaudi):
     def cmt(self,command):
         return super(###CLASS###,self).cmt(command)
 
-    for method in ['getenv','getpack','make','cmt','register']:
+    def add_output_dir(self,outputdir):
+        return super(###CLASS###,self).add_output_dir(outputdir)
+
+    def get_output_dir(self):
+        return super(###CLASS###,self).get_output_dir()
+
+    def add_dataset_name(self,dataset_name):
+        return super(###CLASS###,self).add_dataset_name(dataset_name)
+
+    def get_dataset_name(self):
+        return super(###CLASS###,self).get_dataset_name()
+
+    for method in ['getenv','getpack','make','cmt','register','add_output_dir','get_output_dir','add_dataset_name','get_dataset_name']:
         setattr(eval(method), \"__doc__\", getattr(Gaudi, method).__doc__)
 
 """

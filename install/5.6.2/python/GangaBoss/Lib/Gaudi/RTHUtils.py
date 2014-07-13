@@ -45,6 +45,59 @@ def is_gaudi_child(app):
     
     return False
 
+
+config_boss = Ganga.Utility.Config.getConfig('Boss')
+round_search_path = config_boss['RoundSearchPath']
+f_rs = open(round_search_path, 'r')
+rs_allLines = f_rs.readlines()
+f_rs.close()
+rs_ranges = []
+for rs_line in rs_allLines:
+    data = rs_line.strip()
+    items = data.split(',')
+    rs_ranges.append((int(items[0]), int(items[1]), items[5].lower()))
+
+def get_round_nums(runRangeBlocks):
+    '''Get the round number of the run period'''
+
+    roundSet = set()
+
+    for rs_range in rs_ranges:
+        rs_runL = rs_range[0]
+        rs_runH = rs_range[1]
+        for runRange in runRangeBlocks:
+            runL = runRange[0]
+            runH = runRange[1]
+
+            if runL <  rs_runL and runH >= rs_runL or runL >= rs_runL and runL <= rs_runH or runL >  rs_runH and runH <= rs_runH:
+                roundSet.add(rs_range[2])
+                break
+
+    if not roundSet:
+        roundSet.add('roundxx')
+
+    roundNums = list(roundSet)
+    roundNums.sort()
+    return roundNums
+
+def get_runLH(runRangeBlocks):
+    runL = 0
+    runH = 0
+    if runRangeBlocks:
+        runL = runRangeBlocks[0][0]
+        runH = runRangeBlocks[0][1]
+
+    for runRange in runRangeBlocks:
+        if runRange[0] < runL:
+            runL = runRange[0]
+        if runRange[1] < runL:
+            runL = runRange[1]
+        if runRange[0] > runH:
+            runH = runRange[0]
+        if runRange[1] > runH:
+            runH = runRange[1]
+    return (runL, runH)
+
 def create_runscript(app,outputdata,job):
 
   config = Ganga.Utility.Config.getConfig('Boss')

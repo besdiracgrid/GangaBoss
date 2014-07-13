@@ -13,6 +13,7 @@ from Ganga.GPIDev.Lib.Job import Job
 from Ganga.GPIDev.Adapters.ISplitter import ISplitter, SplittingError
 from Ganga.Utility.util import unique 
 import Ganga.Utility.logging
+from GangaBoss.Lib.Gaudi.RTHUtils import *
 from GangaBoss.Lib.Dataset.DatasetUtils import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
 from Francesc import GaudiExtras
@@ -40,6 +41,8 @@ def copy_app(app):
     cp_app.extra.input_files = app.extra.input_files[:]
     cp_app.extra.outputsandbox = app.extra.outputsandbox[:]
     cp_app.extra.outputdata = app.extra.outputdata
+    cp_app.extra.metadata = app.extra.metadata.copy()
+    cp_app.extra.run_ranges = app.extra.run_ranges[:]
     return cp_app 
 
 def create_gaudi_subjob(job, inputdata):
@@ -203,8 +206,108 @@ class GenSplitter(ISplitter):
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-class BossSplitter(ISplitter):
-    _name = "BossSplitter"
+class BossBaseSplitter(ISplitter):
+    _name = "BossBaseSplitter"
+    _schema = Schema(Version(1,0), {
+            'evtMaxPerJob': SimpleItem(defvalue=50,doc='Number of events per job'),
+	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
+            })
+
+    def split(self,job):
+        if self.evtMaxPerJob > 50000:
+            raise SplittingError('evtMaxPerJob is larger than 50000 : %d. Please set a smaller number' % self.evtMaxPerJob)
+
+        self._jobProperties = []
+
+        self._prepare(job)
+        rndmSeed = self._getSeedStart()
+
+        subjobs=[]
+        for jobProperty in self._jobProperties:
+            subjob = create_gaudi_subjob(job, job.inputdata)
+
+            self._createSimJob(subjob, jobProperty, rndmSeed)
+            if job.application.recoptsfile:
+                self._createRecJob(subjob, jobProperty, rndmSeed)
+
+            subjob.application.extra.metadata['round']    = jobProperty['round']
+            subjob.application.extra.metadata['runFrom']  = jobProperty['runFrom']
+            subjob.application.extra.metadata['runTo']    = jobProperty['runTo']
+
+            subjobs.append(subjob)
+            rndmSeed += 1
+
+        return subjobs
+
+    def _prepare(self):
+        pass
+
+    def _addRunEventId(self, jobProperty):
+        return ''
+
+    def _createSimJob(self, job, jobProperty, rndmSeed):
+        opts = 'from Gaudi.Configuration import * \n'
+        opts += 'importOptions("data.opts")\n'
+        sopts = self._addRunEventId(jobProperty)
+        sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % jobProperty['filename']
+        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
+        logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
+        job.application.extra.input_buffers['data.opts'] += sopts
+        job.application.extra.input_buffers['data.py'] += opts
+
+        job.application.runL = jobProperty['runL']
+        job.application.runH = jobProperty['runH']
+        job.application.eventNumber = jobProperty['eventNum']
+#        job.application.extra.outputdata.location = fcdir
+        job.application.extra.outputdata.files = jobProperty['filename']
+        job.application.outputfile = jobProperty['filename']
+
+    def _createRecJob(self, job, jobProperty, rndmSeed):
+        opts = 'from Gaudi.Configuration import * \n'
+        opts += 'importOptions("recdata.opts")\n'
+        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % jobProperty['filename']
+        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.dst' 
+        sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfilename
+        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
+        logger.debug("zhangxm log: data.opts:%s", sopts)
+        job.application.extra.input_buffers['recdata.opts'] += sopts
+        job.application.extra.input_buffers['recdata.py'] += opts
+
+        job.application.extra.outputdata.files = recfilename
+        job.application.outputfile = recfilename
+
+    def _getSeedStart(self):
+        dbuser = config["dbuser"]
+        dbpass = config["dbpass"]
+        dbhost = config["dbhost"]
+
+        # get initial random seed from DB
+        connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
+        cursor = connection.cursor()
+        sql_rndm = 'select MaxSeed from seed;'
+        cursor.execute(sql_rndm)
+        # there is only one row in this table, so just fetch the first row
+        rndmSeedStart = cursor.fetchone()[0]
+
+        rndmSeedEnd = rndmSeedStart + self._getJobNumber()
+
+        sql_rndm = 'update seed set MaxSeed = %d;' % rndmSeedEnd
+        cursor.execute(sql_rndm)
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return rndmSeedStart
+
+    def _getJobNumber(self):
+        return len(self._jobProperties)
+
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
+
+class BossOldSplitter(ISplitter):
+    _name = "BossOldSplitter"
     _schema =Schema(Version(1,0),{
             'evtMaxPerJob': SimpleItem(defvalue=5,doc='Number of '  \
                                        'events per job'),
@@ -366,7 +469,7 @@ class BossSplitter(ISplitter):
            opts += 'importOptions("recdata.opts")\n'
            sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % fileId
            recfileId = os.path.splitext(fileId)[0] + '.dst' 
-           sopts += 'EventCnvSvc.digiRootoutputFile = "%s";\n' % recfileId
+           sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfileId
            sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
            sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
            logger.debug("zhangxm log: data.opts:%s", sopts)
@@ -378,7 +481,7 @@ class BossSplitter(ISplitter):
 
     def _getShell(self):
         fd = tempfile.NamedTemporaryFile()
-        script = '#!/bin/sh\n'
+        script = '#!/bin/bash\n'
         gaudirunShell = os.environ["GAUDIRUNENV"]
         #cmd = '%s' % (gaudirunShell)
         cmd = 'source %s' % (gaudirunShell)
@@ -436,245 +539,124 @@ class BossSplitter(ISplitter):
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-class UserSplitterByRun(ISplitter):
+class UserSplitterByRun(BossBaseSplitter):
     _name = "UserSplitterByRun"
-    _schema =Schema(Version(1,0),{
-            'evtMaxPerJob': SimpleItem(defvalue=5,doc='Number of '  \
-                                       'events per job'),
-	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
-	    'metadata': SimpleItem(defvalue={},doc='User metadata')
-            })
-    _exportmethods = ['getFcDir']
+    _schema = BossBaseSplitter._schema.inherit_copy()
 
-    _allfcdir = []
-
-    def split(self,job):
+    def _prepare(self, job):
         evtMaxPerJob = self.evtMaxPerJob
         evtTotal = self.evtTotal
-        metadata = self.metadata
 
-        subjobs=[]
-        rndmSeed = 0
+        (runFrom, runTo) = get_runLH(job.application.extra.run_ranges)
+
+        bossRelease = job.application.version
+        bossVer = job.application.extra.metadata.get('bossVer', 'xxx')
+        resonance = job.application.extra.metadata.get('resonance', 'unknown')
+        eventType = job.application.extra.metadata.get('eventType', 'unknown')
+        streamId = job.application.extra.metadata.get('streamId', 'streamxxx')
+        head = bossVer + '_' + resonance + '_' + eventType + '_' + streamId
+
+
         dbuser = config["dbuser"]
         dbpass = config["dbpass"]
         dbhost = config["dbhost"]
-        shell = self._getShell()
 
-        optsfiles = [fileitem.name for fileitem in job.application.optsfile]
-        parser = PythonOptionsParser(optsfiles,job.application.extraopts,shell) 
-        runRangeBlocks = parser.get_run_range()
 
-#        evtMax = parser.get_EvtMax()
-#        outputFileName = parser.get_OutputFileName()
-#        head = '_'.join(outputFileName.split('_')[0:4])
-#        bossVer = outputFileName.split('_')[0]
-#        resonance = outputFileName.split('_')[1]
-#        eventType = outputFileName.split('_')[2]
-#        streamId = outputFileName.split('_')[3]
-
-        # CN: get Boss release from output file name, but in '.' format
-#        bossVer_split = list(bossVer)
-#        bossRelease = bossVer_split[0]+"."+bossVer_split[1]+"."+bossVer_split[2]
-        bossRelease = metadata.get('bossVer', 'x.x.x')
-        bossVer = bossRelease.replace('.', '')
-        metadata['bossVer'] = bossVer
-        resonance = metadata.get('resonance', 'unknown')
-        eventType = metadata.get('eventType', 'unknown')
-        streamId = metadata.get('streamId', 'streamxxx')
-        jobGroup = metadata.get('jobGroup', '')
-        head = bossVer + '_' + resonance + '_' + eventType + '_' + streamId
-
-        logger.debug("Boss release is %s" % bossRelease)
-
-        # get initial random seed from DB
+        # database for the eventId
         connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
         cursor = connection.cursor()
-        sql_rndm = 'select MaxSeed from seed;'
-        cursor.execute(sql_rndm)
-        # there is only one row in this table, so just fetch the first row
-        rndmSeed = cursor.fetchone()[0]
 
-        # CN: loop over all the run range 'blocks' to get total lumi
-        # Looping over all the run range blocks twice, very inefficient, can we do it better?
+        # database for the luminosity of all the runs
+        guest_connection = MySQLdb.connect(user="guest", passwd="guestpass", host=dbhost, db="offlinedb")
+        guest_cursor = guest_connection.cursor()
+
         lumAll = 0
-        for runRange in runRangeBlocks:
-            runFrom = runRange[0]
-            runTo = runRange[1]
-
-            sql = self._generateSQL(bossRelease, runFrom, runTo)[0]
-            connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
-            cursor = connection.cursor()
+        lums = []
+        for runRange in job.application.extra.run_ranges:
+            sql, sftVer, parVer = self._generateSQL(guest_cursor, bossRelease, runRange[0], runRange[1])
             cursor.execute(sql)
             for row in cursor.fetchall():
                 logger.debug("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
                 #CN: check that lumi > 0 
                 if row[1] > 0:
                     lumAll = lumAll + row[1]
+                    lums.append((row[0], row[1], sftVer))
 
-        # CN: loop over all the run range blocks again to do the job splitting
-        for runRange in runRangeBlocks:
-            runFrom = runRange[0]
-            runTo = runRange[1]
-
-            # CN: read round number from text file (contains run numbers
-            # and corresponding exp / round numbers)
-            # TODO: use absolute path to 'official' data file for this
-            round = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
-            metadata['round'] = round
-
-            sql, sftVer, parVer = self._generateSQL(bossRelease, runFrom, runTo)
-
-            connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
-            cursor = connection.cursor()
-            cursor.execute(sql)
-            cursor1 = connection.cursor()
-            logger.debug('zhangxm log: parameters for file catalog: \
-                         eventType->%s, streamId->%s, resonance->%s, round->%s, bossVer->%s' \
-                         % (eventType, streamId, resonance, round, bossVer))
-            fcdir = self._createFcDir(job, metadata)
-            self._allfcdir.append(fcdir)
-            for row in cursor.fetchall():
-                runId = row[0] 
-                #CN: check that lumi > 0 
-                if row[1] > 0:
-                    lum = row[1]
-                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-                    logger.debug("sql: %s" % sql)
-                    if cursor1.execute(sql): 
-                        for rowE in cursor1.fetchall():
-                            eventIdIni = rowE[0]
-                            logger.debug("eventIdIni: %d" % eventIdIni)
-                    else:
-                        eventIdIni = 0
-                    currentNum = (lum/lumAll)*evtTotal
-                    logger.debug("zhangxm log: currentNum %f, evtTotal, %d\n" % (currentNum, evtTotal))
-                    i = 0
-                    if (currentNum-evtMaxPerJob) > 0 : 
-                        ratio = currentNum/evtMaxPerJob
-                        logger.debug("zhangxm log: ratio %f\n" % (ratio))
-                        for i in range(1, int(ratio)+1):
-                            eventId = eventIdIni+(i-1)*evtMaxPerJob
-                            fileId = head + "_run%d_file%04d.rtraw" % (runId, i)
-                            rndmSeed = rndmSeed + 1
-                            subjob = self._createSubjob(job, bossRelease, runId, eventId, fileId, evtMaxPerJob, rndmSeed, fcdir)
-                            subjobs.append(subjob)
-                    logger.debug("zhangxm log: i %d\n" % i)
-                    eventId = eventIdIni+i*evtMaxPerJob
-                    nextEventId = eventIdIni + currentNum
-                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
-                    if cursor1.execute(sql):
-                        sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
-                        logger.debug("sql: %s" % sql)
-                    else:
-                        sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
-                        logger.debug("sql: %s" % sql)
-                    if cursor1.execute(sql):
-                        logger.debug("OK!")
-                    fileId = head + "_run%d_file%04d.rtraw" % (runId, i+1)
-                    eventNum = currentNum - i*evtMaxPerJob
-                    logger.debug("zhangxm log: eventNum %d, currentNum %d\n" % (eventNum, currentNum))
-                    rndmSeed = rndmSeed + 1
-                    subjob = self._createSubjob(job, bossRelease, runId, eventId, fileId, eventNum, rndmSeed, fcdir)
-                    subjobs.append(subjob)
-            # end of for loop over entries returned by SQL query
-        # end of for loop over all run range blocks
+        guest_cursor.close()
+        guest_connection.close()
 
 
-        sql_rndm = 'update seed set MaxSeed = %d;' % rndmSeed
-        cursor1.execute(sql_rndm)
-        connection.commit()
+        for runId, lum, sftVer in lums:
+            currentNum = (lum/lumAll)*evtTotal
+            logger.debug("zhangxm log: currentNum %f, evtTotal, %d\n" % (currentNum, evtTotal))
+
+            i = 0
+            leftNum = currentNum
+            eventIdIni = self._getEventId(cursor, runId, sftVer, currentNum)
+            while leftNum > 0:
+                i += 1
+                jobProperty = {}
+                jobProperty['filename'] = head + "_%s_%s_file%04d.rtraw" % (runId, runId, i)
+                jobProperty['eventNum'] = evtMaxPerJob if leftNum > evtMaxPerJob else leftNum
+
+                jobProperty['runFrom'] = runFrom
+                jobProperty['runTo'] = runTo
+                jobProperty['runL'] = runId
+                jobProperty['runH'] = runId
+                jobProperty['eventId'] = eventIdIni
+
+                jobProperty['round'] = get_round_nums([(runId, runId)])[0]
+
+                self._jobProperties.append(jobProperty)
+
+                leftNum -= evtMaxPerJob
+                eventIdIni += evtMaxPerJob
+
         cursor.close()
-        cursor1.close()
         connection.close()
-        return subjobs
 
-    def _createFcDir(self, job, metadata):
-        dataType = 'rtraw'
-        if job.application.recoptsfile:
-           dataType = 'dst'
-        metadata['dataType'] = dataType
-        bdr = BDRegister(metadata)
-        fcdir = bdr.createDir('user')
-        logger.debug("zhangxm log: use BDRegister to create directory!\n")
-        return fcdir
+    def _addRunEventId(self, jobProperty):
+        sopts = 'RealizationSvc.InitEvtID = %d;\n' % jobProperty['eventId']
+        sopts += 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
+        return sopts
 
-    def _createSubjob(self, job, bossRelease, runId, eventId, fileId, eventNum, rndmSeed, fcdir):
-        j = create_gaudi_subjob(job, job.inputdata)
-        opts = 'from Gaudi.Configuration import * \n'
-        opts += 'importOptions("data.opts")\n'
-        sopts = 'RealizationSvc.InitEvtID = %d;\n' % eventId
-        sopts += 'RealizationSvc.RunIdList = {%d};\n' % runId
-        sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % fileId
-        sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
-        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        sopts += 'DatabaseSvc.DbType = "sqlite";\n'
-        sopts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database";\n' % bossRelease
-        logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
-        j.application.extra.input_buffers['data.opts'] += sopts
-        j.application.extra.input_buffers['data.py'] += opts
-        j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + fileId
-        j.application.outputfile = fcdir + "/" + fileId
-        j.application.runL = runId 
-        #j.application.extra.outputdata.location = fcdir
-        if j.application.recoptsfile:
-           opts = 'from Gaudi.Configuration import * \n'
-           opts += 'importOptions("recdata.opts")\n'
-           sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % fileId
-           recfileId = os.path.splitext(fileId)[0] + '.dst' 
-           sopts += 'EventCnvSvc.digiRootoutputFile = "%s";\n' % recfileId
-           sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
-           sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-           logger.debug("zhangxm log: data.opts:%s", sopts)
-           j.application.extra.input_buffers['recdata.opts'] += sopts
-           j.application.extra.input_buffers['recdata.py'] += opts
-           j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + recfileId
-           j.application.outputfile = fcdir + "/" + recfileId
-        return j 
 
-    def _getShell(self):
-        fd = tempfile.NamedTemporaryFile()
-        script = '#!/bin/sh\n'
-        gaudirunShell = os.environ["GAUDIRUNENV"]
-        #cmd = '%s' % (gaudirunShell)
-        cmd = 'source %s' % (gaudirunShell)
-        script += '%s \n' % cmd
-        fd.write(script)
-        fd.flush()
-        logger.debug("zhangxm log: run boss env script:\n%s" % script)
+    def _getEventId(self, cursor, runId, sftVer, currentNum):
+        eventIdIni = 0
 
-        shell = Shell(setup=fd.name)
-        return shell 
+        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+        logger.debug("sql: %s" % sql)
+        if cursor.execute(sql): 
+            for rowE in cursor.fetchall():
+                eventIdIni = rowE[0]
+                logger.debug("eventIdIni: %d" % eventIdIni)
+        else:
+            eventIdIni = 0
 
-    def _getRoundNum(self, infoFile, runL, runH):
-        f = open(infoFile, 'r')
-        allLines = f.readlines()
-        f.close()
+        nextEventId = eventIdIni + currentNum
 
-        roundNum = ""
-        for line in allLines:
-            data = line.strip()
-            items = data.split(',')
-            file_runL = string.atoi(items[0])
-            file_runH = string.atoi(items[1])
-                                     
-            if runL >= file_runL and runH <= file_runH:
-                roundNum = string.lower(items[5])
+        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+        if cursor.execute(sql):
+            sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
+            logger.debug("sql: %s" % sql)
+        else:
+            sql = 'INSERT INTO McNextEventID (EventID, RunID, SftVer) VALUES(%d, %d, "%s");' % (nextEventId, runId, sftVer)
+            logger.debug("sql: %s" % sql)
+        if cursor.execute(sql):
+            logger.debug("OK!")
 
-        return roundNum
-        
-    def _generateSQL(self, bossRelease, runFrom, runTo):
+        return eventIdIni
 
-        dbhost = config["dbhost"]
+    def _generateSQL(self, guest_cursor, bossRelease, runFrom, runTo):
 
-        # CN: TODO: when db admin gives 'production' user permissions for CalVtxLumVer
-        # table, change these back to config version instead of hard-coding guest user
-        guest_connection = MySQLdb.connect(user="guest", passwd="guestpass", host=dbhost, db="offlinedb")
+        br = bossRelease
+        if bossRelease == '6.6.4.p02':
+            br = '6.6.4.p01'
 
         # CN: get SftVer and ParVer for this run range
-        sql = 'select SftVer, ParVer from CalVtxLumVer where BossRelease = "%s" and RunFrom <= %d and RunTo >= %d and DataType = "LumVtx";' % (bossRelease, runFrom, runTo)
+        sql = 'select SftVer, ParVer from CalVtxLumVer where BossRelease = "%s" and RunFrom <= %d and RunTo >= %d and DataType = "LumVtx";' % (br, runFrom, runTo)
         sftVer = ""
         parVer = ""
-        guest_cursor = guest_connection.cursor()
         guest_cursor.execute(sql)
         for row in guest_cursor.fetchall():
             sftVer = row[0]
@@ -683,182 +665,52 @@ class UserSplitterByRun(ISplitter):
         # CN: generate SQL query to get RunNo and luminosity for this run range
         sql = 'select RunNo,OfflineTwoGam from OfflineLum where RunNo >= %d and RunNo <= %d && SftVer = "%s" and ParVer = "%s";' % (runFrom, runTo, sftVer, parVer)
 
-        guest_cursor.close()
-        guest_connection.close()
-
         return sql, sftVer, parVer
-
-    def getFcDir(self):
-        return '\n'.join(self._allfcdir)
 
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-class UserSplitterByEvent(ISplitter):
+class UserSplitterByEvent(BossBaseSplitter):
     _name = "UserSplitterByEvent"
-    _schema =Schema(Version(1,0),{
-            'evtMaxPerJob': SimpleItem(defvalue=5,doc='Number of '  \
-                                       'events per job'),
-	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
-	    'metadata': SimpleItem(defvalue={},doc='User metadata')
-            })
-    _exportmethods = ['getFcDir']
+    _schema = BossBaseSplitter._schema.inherit_copy()
 
-    _allfcdir = []
-
-    def split(self,job):
+    def _prepare(self, job):
         evtMaxPerJob = self.evtMaxPerJob
         evtTotal = self.evtTotal
-        metadata = self.metadata
+        metadata = job.application.extra.metadata
 
-        subjobs=[]
-        rndmSeed = 0
-        dbuser = config["dbuser"]
-        dbpass = config["dbpass"]
-        dbhost = config["dbhost"]
-        shell = self._getShell()
+        (runFrom, runTo) = get_runLH(job.application.extra.run_ranges)
+        round = get_round_nums(job.application.extra.run_ranges)[0]
 
-        optsfiles = [fileitem.name for fileitem in job.application.optsfile]
-        parser = PythonOptionsParser(optsfiles,job.application.extraopts,shell) 
-        runRangeBlocks = parser.get_run_range()
+        bossVer = job.application.extra.metadata.get('bossVer', 'xxx')
+        resonance = job.application.extra.metadata.get('resonance', 'unknown')
+        eventType = job.application.extra.metadata.get('eventType', 'unknown')
+        streamId = job.application.extra.metadata.get('streamId', 'streamxxx')
+        head = '%s_%s_%s_%s_%s_%s' % (bossVer, resonance, eventType, streamId, runFrom, runTo)
 
-        # CN: loop over all the run range blocks again to do the job splitting
-        runRange = runRangeBlocks[0]
-        runFrom = runRange[0]
-        runTo = runRange[1]
-
-#        evtMax = parser.get_EvtMax()
-#        outputFileName = parser.get_OutputFileName()
-
-        bossRelease = metadata.get('bossVer', 'x.x.x')
-        bossVer = bossRelease.replace('.', '')
-        metadata['bossVer'] = bossVer
-        resonance = metadata.get('resonance', 'unknown')
-        eventType = metadata.get('eventType', 'unknown')
-        streamId = metadata.get('streamId', 'streamxxx')
-        jobGroup = metadata.get('jobGroup', '')
-        head = bossVer + '_' + resonance + '_' + eventType + '_' + streamId
-
-        metadata['runL'] = runFrom
-        metadata['runH'] = runTo
-        metadata['submitTime'] = time.strftime('%Y-%m-%d %H:%M:%S')
-
-        # CN: read round number from text file (contains run numbers
-        # and corresponding exp / round numbers)
-        # TODO: use absolute path to 'official' data file for this
-        round = self._getRoundNum("/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt", runFrom, runTo)
-        metadata['round'] = round
-
-        logger.debug('zhangxm log: parameters for file catalog: \
-                     eventType->%s, streamId->%s, resonance->%s, round->%s, bossVer->%s' \
-                     % (eventType, streamId, resonance, round, bossVer))
-        fcdir = self._createFcDir(job, metadata)
-        self._allfcdir.append(fcdir)
-
-
-        # get initial random seed from DB
-        connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
-        cursor = connection.cursor()
-        sql_rndm = 'select MaxSeed from seed;'
-        cursor.execute(sql_rndm)
-        # there is only one row in this table, so just fetch the first row
-        rndmSeed = cursor.fetchone()[0]
 
         i = 0
-        currentNum = evtTotal
-        while currentNum > 0:
+        leftNum = evtTotal
+        while leftNum > 0:
             i += 1
-            fileId = head + "_file%04d.rtraw" % i
-            rndmSeed = rndmSeed + 1
-            evtNum = evtMaxPerJob if currentNum > evtMaxPerJob else currentNum
-            subjob = self._createSubjob(job, bossRelease, runFrom, runTo, fileId, evtNum, rndmSeed, fcdir)
-            subjobs.append(subjob)
-            currentNum -= evtMaxPerJob
+            jobProperty = {}
+            jobProperty['filename'] = head + "_file%04d.rtraw" % i
+            jobProperty['eventNum'] = evtMaxPerJob if leftNum > evtMaxPerJob else leftNum
 
+            jobProperty['runFrom'] = runFrom
+            jobProperty['runTo'] = runTo
+            jobProperty['runL'] = runFrom
+            jobProperty['runH'] = runTo
+            jobProperty['round'] = round
 
-        sql_rndm = 'update seed set MaxSeed = %d;' % rndmSeed
-        cursor.execute(sql_rndm)
-        connection.commit()
-        cursor.close()
-        connection.close()
-        return subjobs
+            self._jobProperties.append(jobProperty)
 
-    def _createFcDir(self, job, metadata):
-        dataType = 'rtraw'
-        if job.application.recoptsfile:
-           dataType = 'dst'
-        metadata['dataType'] = dataType
-        bdr = BDRegister(metadata)
-        fcdir = bdr.createDir('user')
-        logger.debug("zhangxm log: use BDRegister to create directory!\n")
-        return fcdir
+            leftNum -= evtMaxPerJob
 
-    def _createSubjob(self, job, bossRelease, runL, runH, fileId, eventNum, rndmSeed, fcdir):
-        j = create_gaudi_subjob(job, job.inputdata)
-        opts = 'from Gaudi.Configuration import * \n'
-        opts += 'importOptions("data.opts")\n'
-#        sopts = 'RealizationSvc.InitEvtID = %d;\n' % eventId
-#        sopts += 'RealizationSvc.RunIdList = {%d};\n' % runId
-        sopts = 'RootCnvSvc.digiRootOutputFile = "%s";\n' % fileId
-        sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
-        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        sopts += 'DatabaseSvc.DbType = "sqlite";\n'
-        sopts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database";\n' % bossRelease
-        logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
-        j.application.extra.input_buffers['data.opts'] += sopts
-        j.application.extra.input_buffers['data.py'] += opts
-        j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + fileId
-        j.application.outputfile = fcdir + "/" + fileId
-        j.application.runL = runL
-        j.application.runH = runH
-        #j.application.extra.outputdata.location = fcdir
-        if j.application.recoptsfile:
-           opts = 'from Gaudi.Configuration import * \n'
-           opts += 'importOptions("recdata.opts")\n'
-           sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % fileId
-           recfileId = os.path.splitext(fileId)[0] + '.dst' 
-           sopts += 'EventCnvSvc.digiRootoutputFile = "%s";\n' % recfileId
-           sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
-           sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-           logger.debug("zhangxm log: data.opts:%s", sopts)
-           j.application.extra.input_buffers['recdata.opts'] += sopts
-           j.application.extra.input_buffers['recdata.py'] += opts
-           j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + recfileId
-           j.application.outputfile = fcdir + "/" + recfileId
-        return j 
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-    def _getShell(self):
-        fd = tempfile.NamedTemporaryFile()
-        script = '#!/bin/sh\n'
-        gaudirunShell = os.environ["GAUDIRUNENV"]
-        #cmd = '%s' % (gaudirunShell)
-        cmd = 'source %s' % (gaudirunShell)
-        script += '%s \n' % cmd
-        fd.write(script)
-        fd.flush()
-        logger.debug("zhangxm log: run boss env script:\n%s" % script)
-
-        shell = Shell(setup=fd.name)
-        return shell 
-
-    def _getRoundNum(self, infoFile, runL, runH):
-        f = open(infoFile, 'r')
-        allLines = f.readlines()
-        f.close()
-
-        roundNum = ""
-        for line in allLines:
-            data = line.strip()
-            items = data.split(',')
-            file_runL = string.atoi(items[0])
-            file_runH = string.atoi(items[1])
-                                     
-            if runL >= file_runL and runH <= file_runH:
-                roundNum = string.lower(items[5])
-
-        return roundNum
-
-    def getFcDir(self):
-        return '\n'.join(self._allfcdir)
+class BossSplitter(UserSplitterByRun):
+    _name = "BossSplitter"
+    _schema = UserSplitterByRun._schema.inherit_copy()
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#

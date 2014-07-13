@@ -48,6 +48,11 @@ defval = "bes3db1.ihep.ac.cn"
 #defval = "202.122.33.121"
 configBoss.addOption('dbhost',defval,dscrpt)
 
+# RoundSearch path
+dscrpt = 'The RoundSearch file path'
+defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt'
+configBoss.addOption('RoundSearchPath',defval,dscrpt)
+
 
 # Set default values for the Dirac section.
 dscrpt = 'Display DIRAC API stdout to the screen in Ganga?'

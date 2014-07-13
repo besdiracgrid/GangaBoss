@@ -124,7 +124,7 @@ class Dirac(IBackend):
         
         self.id = result['Value']     
         return type(self.id) == int
-   
+
     def submit(self, subjobconfig, master_input_sandbox):
         """Submit a DIRAC job"""
         j = self.getJobObject()

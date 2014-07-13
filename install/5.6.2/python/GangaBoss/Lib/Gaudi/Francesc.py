@@ -106,7 +106,7 @@ class Francesc(IApplication):
         ver  = self.version
 
         fd = tempfile.NamedTemporaryFile()
-        script = '#!/bin/sh\n'
+        script = '#!/bin/bash\n'
         if self.user_release_area:
             script += 'User_release_area=%s; export User_release_area\n' % \
                       expandfilename(self.user_release_area)
@@ -270,6 +270,7 @@ class GaudiExtras:
         self.inputdata = BesDataset()
         self.outputsandbox = []
         self.outputdata = OutputData()
+        self.metadata = {}
         self.input_buffers['data.py'] = ''
         self.input_buffers['recdata.py'] = ''
         self.input_buffers['data.opts'] = ''

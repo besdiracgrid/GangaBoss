@@ -5,6 +5,7 @@ import string
 import Ganga.Utility.Config
 import Ganga.Utility.logging
 from Ganga.Core import BackendError
+from GangaBoss.Lib.Dataset.BDRegister import DfcOperation
 
 logger = Ganga.Utility.logging.getLogger()
 config = Ganga.Utility.Config.getConfig('Boss')
@@ -92,6 +93,10 @@ class DiracApplication:
 class DiracScript:
     '''Collects info for and writes script that creates the DIRAC job.'''
 
+    dfcOp = DfcOperation()
+    jobGroupPrefix = 'prod' if dfcOp.getGroupName() == 'production' else dfcOp.getUserName()
+    jobGroupPrefix += '_'
+
     def __init__(self):
         self.settings = None
         self.input_sandbox = None
@@ -119,10 +124,10 @@ class DiracScript:
             contents += "j.setOutputSandbox(%s)\n" % str(self.output_sandbox)
         if self.exe: contents += self.exe.write()
         if self.inputdata: contents += self.inputdata.write()
-        if self.outputdata and self.outputdata.files:
-            contents += 'j.setOutputData(%s,outputPath="%s",outputSE=%s)\n' % \
-                        (str(self.outputdata.files),self.outputdata.location,
-                         config['DiracOutputDataSE'])
+#        if self.outputdata and self.outputdata.files:
+#            contents += 'j.setOutputData(%s,outputPath="%s",outputSE=%s)\n' % \
+#                        (str(self.outputdata.files),self.outputdata.location,
+#                         config['DiracOutputDataSE'])
         if self.platform:
             contents += "j.setSystemConfig('%s')\n" % self.platform
         contents += '\n'
@@ -130,6 +135,13 @@ class DiracScript:
             contents += '# <-- user settings \n'
             for key in self.settings:
                 value = self.settings[key]
+
+                # Add username prefix for job group
+                if key == 'JobGroup':
+                    value = str(value)
+                    if not value.startswith(DiracScript.jobGroupPrefix):
+                        value = DiracScript.jobGroupPrefix + value
+
                 if type(value) == type(''):
                     contents += 'j.set%s("%s")\n' % (key,value)
                 else:
