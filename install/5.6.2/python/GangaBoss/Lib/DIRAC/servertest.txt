@@ -1,4 +1,0 @@
-Start dirac_server execute function
-Proxy Valid
-Send command:
-result = DiracCommands.normCPUTime(435)
