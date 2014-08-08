@@ -144,17 +144,17 @@ def getRantrgInfo(run):
     filelist = []
 
     import sqlite3
+    sql3File = '/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer
     try:
-        conn = sqlite3.connect('/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer)
+        conn = sqlite3.connect(sql3File)
+        c = conn.cursor()
+        c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo=?", (run,))
+        result = c.fetchall()
+        conn.commit()
+        conn.close()
     except sqlite3.Error as e:
-        print >>errFile, 'Open sqlite3 file "%s" error: %s' % ('/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer, e)
+        print >>errFile, 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
         return roundNum, dateDir, filelist
-
-    c = conn.cursor()
-    c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo=?", (run,))
-    result = c.fetchall()
-    conn.commit()
-    conn.close()
 
     if result:
         filePath = result[0][1]
