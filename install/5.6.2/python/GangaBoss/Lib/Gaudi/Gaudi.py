@@ -90,6 +90,8 @@ class Gaudi(Francesc):
     schema['longIdle'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Create dataset'
     schema['createDataset'] = SimpleItem(defvalue=True,doc=docstr)
+    docstr = 'Use local random trigger files'
+    schema['localRantrg'] = SimpleItem(defvalue=True,doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass

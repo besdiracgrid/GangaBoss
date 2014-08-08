@@ -60,6 +60,7 @@ def boss_run_wrapper():
 
 bossVer=$1
 prefix=$2
+extrapy=$3
 
 besRoot=/cvmfs/boss.cern.ch
 cd ${besRoot}/slc5_amd64_gcc43/${bossVer}
@@ -68,7 +69,7 @@ source scripts/${bossVer}/setup.sh
 source dist/${bossVer}/TestRelease/*/cmt/setup.sh
 cd $OLDPWD
 
-gaudirun.py -n -v -o ${prefix}options.opts ${prefix}options.pkl ${prefix}data.py
+gaudirun.py -n -v -o ${prefix}options.opts ${prefix}options.pkl ${prefix}data.py ${extrapy}
 boss.exe ${prefix}options.opts 1>>${prefix}bosslog 2>>${prefix}bosserr
 result=$?
 if [ $result != 0 ]; then 
@@ -90,13 +91,14 @@ if [ ! -f $outputfile ]; then
 fi
 """
 
-def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH):
+def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg):
     script_head = """#!/usr/bin/env python
 
-import os, sys, shutil, re, time, random
+import os, sys, shutil, re, time, random, socket
 from subprocess import Popen, call
 
-from DIRAC import S_OK, S_ERROR
+import DIRAC
+from DIRAC import S_OK, S_ERROR, gConfig
 
 from DIRAC.Core.Base import Script
 Script.parseCommandLine( ignoreErrors = False )
@@ -110,6 +112,9 @@ from DIRAC.Resources.Catalog.FileCatalogClient import FileCatalogClient
 fccType = 'DataManagement/FileCatalog'
 fcc = FileCatalogClient(fccType)
 
+from DIRAC.Core.DISET.RPCClient                      import RPCClient
+
+doReconstruction = os.path.exists('recoptions.pkl')
 delDisableWatchdog = False
 
 logFile = open('script.log', 'w')
@@ -118,6 +123,9 @@ rantrgLogFile = open('rantrg.log', 'w+')
 rantrgErrFile = open('rantrg.err', 'w')
 
 jobID = os.environ.get('DIRACJOBID', '0')
+siteName = DIRAC.siteName()
+hostname = socket.gethostname()
+
 bossVer = '%s'
 lfn = '%s'
 loglfn = '%s'
@@ -125,9 +133,86 @@ se = '%s'
 eventNumber = %s
 runL = %s
 runH = %s
-""" % (bossVer, lfn, loglfn, se, eventNumber, runL, runH)
+useLocalRantrg = %s
+
+""" % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg)
 
     script_body = """
+def getRantrgInfo(run):
+    roundNum = ''
+    dateDir = ''
+    filelist = []
+
+    import sqlite3
+    try:
+        conn = sqlite3.connect('/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer)
+    except sqlite3.Error as e:
+        print >>errFile, 'Open sqlite3 file "%s" error: %s' % ('/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer, e)
+        return roundNum, dateDir, filelist
+
+    c = conn.cursor()
+    c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo=?", (run,))
+    result = c.fetchall()
+    conn.commit()
+    conn.close()
+
+    if result:
+        filePath = result[0][1]
+        roundStart = filePath.rfind('round')
+        if roundStart >= 0:
+            roundNum = filePath[roundStart:]
+            roundEnd = roundNum.find('/')
+            if roundEnd >= 0:
+                dateDir = roundNum[roundEnd:]
+                roundNum = roundNum[:roundEnd]
+                dateEnd = dateDir.find('/')
+                if dateEnd >= 0:
+                    dateDir = dateDir[:dateEnd]
+
+        for line in result:
+            filelist.append(line[2])
+
+    return roundNum, dateDir, filelist
+
+def getLocalRantrgPath():
+    roundNum, dateDir, filelist = getRantrgInfo(runL)
+    if not roundNum:
+        return ''
+
+    diracGridType, place, country = siteName.split('.')
+
+    rantrgAvailable = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Available'%(diracGridType, siteName), [])
+    if roundNum not in rantrgAvailable:
+        return ''
+
+    rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Locations'%(diracGridType, siteName, roundNum), [])
+    if not rantrgRoundPaths:
+        rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Location'%(diracGridType, siteName), '')
+        if not rantrgMainPath:
+            return ''
+        rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
+
+    rantrgPath = ''
+
+    for rantrgRoundPath in rantrgRoundPaths:
+        if os.path.exists(os.path.join(rantrgRoundPath, filelist[0])):
+            rantrgPath = rantrgRoundPath
+            break
+        if dateDir and os.path.exists(os.path.join(rantrgRoundPath, dateDir, filelist[0])):
+            rantrgPath = os.path.join(rantrgRoundPath, dateDir)
+            break
+
+    if not rantrgPath:
+        for rantrgRoundPath in rantrgRoundPaths:
+            for root,subdirs,files in os.walk(rantrgRoundPath):
+                if filelist[0] in files:
+                    rantrgPath = root
+                    break
+            if rantrgPath:
+                break
+
+    return rantrgPath
+
 def cmd(args):
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, args)
     print >>logFile, startcmd
@@ -148,28 +233,40 @@ def cp(src, dst):
     if os.path.exists(src) and os.path.exists(dst):
         shutil.copy(src, dst)
 
+def setJobInfo(message):
+    if jobID != '0':
+        info = RPCClient( 'Info/BadgerInfo' )
+        result = info.addJobLog( int(jobID), siteName, hostname, message )
+        if not result['OK']:
+            print >>errFile, 'setJobInfo error: %s' % result
+
 def setJobStatus(message):
     if jobID != '0':
         jobReport = JobReport(int(jobID), 'BossScript')
-        jobReport.setApplicationStatus(message)
+        result = jobReport.setApplicationStatus(message)
+        if not result['OK']:
+            print >>errFile, 'setJobStatus error: %s' % result
 
 def setRantrgSEJobStatus():
     rantrgLogFile.seek(0)
     rantrgOutput = rantrgLogFile.read()
-    rantrgSe = 'unknown'
     m = re.search('^Determine SE: (.*)$', rantrgOutput, re.M)
     if m:
         rantrgSe = m.group(1)
+    if not rantrgSe:
+        rantrgSe = 'unknown'
     setJobStatus('Random Trigger Downloaded from: %s' % rantrgSe)
 
 def uploadData(lfn, se):
+    removeData(lfn)
+
     path = os.path.basename(lfn)
-    result = dirac.addFile(lfn, path, se)
     for i in range(0, 5):
+        result = dirac.addFile(lfn, path, se)
         if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
             break
         time.sleep(random.randint(180, 600))
-        print '- Upload to %s on SE %s failed, try again' % (lfn, se)
+        print >>errFile, '- Upload to %s on SE %s failed, try again' % (lfn, se)
     if result['OK']:
         if result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
             print >>logFile, 'Successfully uploading %s to %s. Retry %s' % (lfn, se, i+1)
@@ -182,12 +279,16 @@ def uploadData(lfn, se):
         return result
 
 def removeData(lfn):
-    result = dirac.removeFile(lfn)
+    result = fcc.isFile(lfn)
+    if not (result['OK'] and lfn in result['Value']['Successful'] and result['Value']['Successful'][lfn]):
+        return result
+
     for i in range(0, 16):
+        result = dirac.removeFile(lfn)
         if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
             break
-        time.sleep(random.randint(60, 300))
-        print '- Remove %s failed, try again' % lfn
+        time.sleep(random.randint(6, 30))
+        print >>errFile, '- Remove %s failed, try again' % lfn
     if result['OK']:
         if result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
             print >>logFile, 'Successfully remove %s. Retry %s' % (lfn, i+1)
@@ -204,8 +305,8 @@ def registerMetadata(lfn, metadata):
         result = fcc.setMetadata(lfn, metadata)
         if result['OK']:
             break
-        time.sleep(random.randint(30, 120))
-        print '- Register metadata for %s failed, try again' % lfn
+        time.sleep(random.randint(6, 30))
+        print >>errFile, '- Register metadata for %s failed, try again' % lfn
     if not result['OK']:
         print >>errFile, 'Failed to register metadata for %s. Retry %s' % (lfn, i+1)
         return S_ERROR('Register metadata for %s failed' % lfn)
@@ -221,7 +322,7 @@ def uploadLog(loglfn, se):
     cp('bosslog', logdir)
     cp('bosserr', logdir)
     cp('recbosslog', logdir)
-    cp('recbosslog', logdir)
+    cp('recbosserr', logdir)
     cp('script.log', logdir)
     cp('script.err', logdir)
     cp('rantrg.log', logdir)
@@ -253,48 +354,173 @@ def enableWatchdog():
         shutil.rmtree('DISABLE_WATCHDOG_CPU_WALLCLOCK_CHECK', True)
         delDisableWatchdog = False
 
-def bossjob():
-    # download random trigger files simultaneously
-    if os.path.exists('recoptions.pkl'):
-        # download random trigger files
-        setJobStatus('Downloading Random Trigger')
-        disableWatchdog()
-        result = cmd(['bash', './gaudi_run.sh', bossVer])
-        pd = Popen(['besdirac-dms-rantrg-get', '-j', 'options_rantrg.opts'], stdout=rantrgLogFile, stderr=rantrgErrFile)
+def startRantrgDownload():
+    # download random trigger files
+    setJobStatus('Downloading Random Trigger')
+    disableWatchdog()
+    result = cmd(['bash', './gaudi_run.sh', bossVer])
+    return Popen(['besdirac-dms-rantrg-get', '-j', 'options_rantrg.opts'], stdout=rantrgLogFile, stderr=rantrgErrFile)
 
-    # run sim
+def startSimulation():
     setJobStatus('Simulation')
-    result = cmd(['bash', './boss_run.sh', bossVer])
-    if result:
-        setJobStatus('Simulation Error: %s' % result)
-        return result
 
-    if os.path.exists('recoptions.pkl'):
-        setJobStatus('Waiting for Random Trigger')
+    startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['bash', './boss_run.sh', bossVer])
+    print >>logFile, startcmd
+    print >>errFile, startcmd
+    logFile.flush()
+    errFile.flush()
 
-        # download random trigger files over
-        result = pd.wait()
-        setRantrgSEJobStatus()
-        if result:
-            setJobStatus('Download Random Trigger Error: %s' % result)
-            return result
+    return Popen(['bash', './boss_run.sh', bossVer], stdout=logFile, stderr=errFile)
 
+def endSimulation():
+    endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['bash', './boss_run.sh', bossVer], '='*80)
+    print >>logFile, endcmd
+    print >>errFile, endcmd
+    logFile.flush()
+    errFile.flush()
+
+#    setJobStatus('Simulation Finished')
+
+def generateLocalRantrgOpt(localRantrgPath):
+    extraOptFile = open('extra.opts', 'w')
+    extraOptFile.write('MixerAlg.UseNewDataDir = "%s";\\n' % localRantrgPath)
+    extraOptFile.close()
+
+def checkRantrgDownloadStatus():
+    pass
+
+def bossjob():
+    localRantrgPath = ''
+
+    setJobInfo('Start Job')
+
+    # prepare for reconstruction
+    if doReconstruction:
+        if useLocalRantrg:
+            localRantrgPath = getLocalRantrgPath()
+
+        if localRantrgPath:
+            print >>logFile, 'Use local random trigger path: %s' % localRantrgPath
+            cmd(['ls', '-ld', localRantrgPath])
+            generateLocalRantrgOpt(localRantrgPath)
+        else:
+            setJobInfo('Start Downloading Random Trigger')
+            pdRantrg = startRantrgDownload()
+
+    # run simulation
+    setJobInfo('Start Simulation')
+    pdSimulation = startSimulation()
+
+    # 0: not started, 1: running, 2: finished ok, 3: finished with errors
+    simRunning = False
+    rantrgRunning = False
+
+    retCode = 0
+
+    if not doReconstruction or localRantrgPath:
+        # only monitor simulation
+        simRunning = True
+        simRetCode = pdSimulation.wait()
+        simRunning = False
+        endSimulation()
+        if simRetCode:
+            setJobStatus('Simulation Error: %s' % simRetCode)
+            setJobInfo('End Simulation with Error')
+            retCode = simRetCode
+        else:
+            setJobStatus('Simulation Finished Successfully')
+            setJobInfo('End Simulation')
+    else:
+        # monitor simulation and rantrg downloading
+        simRunning = True
+        rantrgRunning = True
+        while True:
+            simRetCode = pdSimulation.poll()
+            rantrgRetCode = pdRantrg.poll()
+
+            if simRunning and simRetCode != None:
+                simRunning = False
+                endSimulation()
+                if simRetCode:
+                    setJobStatus('Simulation Error: %s' % simRetCode)
+                    setJobInfo('End Simulation with Error')
+                    retCode = simRetCode
+                    break
+                else:
+                    setJobStatus('Simulation Finished Successfully')
+                    setJobInfo('End Simulation')
+                    if rantrgRunning:
+                        setJobStatus('Waiting for Random Trigger')
+
+            if rantrgRunning and rantrgRetCode != None:
+                rantrgRunning = False
+                if rantrgRetCode:
+                    setJobStatus('Download Random Trigger Error: %s' % rantrgRetCode)
+                    setJobInfo('End Download Random Trigger with Error')
+                    retCode = rantrgRetCode
+                    break
+                else:
+                    setRantrgSEJobStatus()
+#                    setJobStatus('Download Random Trigger Successfully')
+                    setJobInfo('End Downloading Random Trigger')
+                    if simRunning:
+                        setJobStatus('Waiting for Simulation')
+
+            if rantrgRetCode == None:
+                checkRantrgDownloadStatus()
+
+            if not (simRunning or rantrgRunning):
+                break
+
+            time.sleep(5)
+
+    # teminate running process
+    if simRunning:
+        setJobStatus('Terminate Simulation')
+        setJobInfo('End Simulation by Terminate')
+        pdSimulation.terminate()
+        simRunning = False
+        endSimulation()
+    if rantrgRunning:
+        setJobStatus('Terminate Random Trigger Downloading')
+        setJobInfo('End Random Trigger Downloading by Terminate')
+        pdRantrg.terminate()
+        rantrgRunning = False
+
+    if retCode:
+        return retCode
+
+    # reconstruction
+    if doReconstruction:
         # run rec
         setJobStatus('Reconstruction')
-        result = cmd(['bash', './boss_run.sh', bossVer, 'rec'])
+        setJobInfo('Start Reconstruction')
+        if localRantrgPath:
+            result = cmd(['bash', './boss_run.sh', bossVer, 'rec', 'extra.opts'])
+        else:
+            result = cmd(['bash', './boss_run.sh', bossVer, 'rec'])
+
         if result:
             setJobStatus('Reconstruction Error: %s' % result)
+            setJobInfo('End Reconstruction with Error')
             return result
+
+        setJobInfo('End Reconstruction')
+
 
     # upload file and reg
     setJobStatus('Uploading Data')
+    setJobInfo('Start Uploading Data')
     result = uploadData(lfn, se)
     if not result['OK']:
         setJobStatus('Upload Data Error')
+        setJobInfo('End Uploading Data with Error')
         print >>errFile, 'Upload Data Error:\\n%s' % result
         return 72
+    setJobInfo('End Uploading Data')
 
     setJobStatus('Setting Metadata')
+    setJobInfo('Start Setting Metadata')
     metadata = {'jobId':       jobID,
                 'eventNumber': eventNumber,
                 'runL':        runL,
@@ -303,12 +529,15 @@ def bossjob():
                }
     result = registerMetadata(lfn, metadata)
     if not result['OK']:
-        setJobStatus('Set Metadata Error')
+        setJobStatus('Setting Metadata Error')
+        setJobInfo('End Setting Metadata with Error')
         print >>errFile, 'Set Metadata Error:\\n%s' % result
         removeData(lfn)
         return 73
+    setJobInfo('End Set Metadata')
 
     setJobStatus('Boss Job Finished Successfully')
+    setJobInfo('End Job')
     return 0
 
 
@@ -515,7 +744,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         lfn = os.path.join(app.extra.outputdata.location, app.outputfile)
         loglfn = os.path.join(bdr.getLogDirName(), app.outputfile + '.log.tar.gz')
         wrapper = boss_script_wrapper(app.version, lfn, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
-                                      app.eventNumber, app.runL, app.runH)
+                                      app.eventNumber, app.runL, app.runH, app.localRantrg)
         j = app.getJobObject()
         script = os.path.join(j.getInputWorkspace().getPath(), "boss_dirac.py")
         file=open(script,'w')
