@@ -236,7 +236,7 @@ def cp(src, dst):
 def setJobInfo(message):
     if jobID != '0':
         info = RPCClient( 'Info/BadgerInfo' )
-        result = info.addJobLog( int(jobID), siteName, hostname, message )
+        result = info.addJobLog( int(jobID), siteName, hostname, eventNumber, message )
         if not result['OK']:
             print >>errFile, 'setJobInfo error: %s' % result
 
@@ -390,11 +390,12 @@ def checkRantrgDownloadStatus():
     pass
 
 def bossjob():
-    localRantrgPath = ''
+    disableWatchdog()
 
     setJobInfo('Start Job')
 
     # prepare for reconstruction
+    localRantrgPath = ''
     if doReconstruction:
         if useLocalRantrg:
             localRantrgPath = getLocalRantrgPath()

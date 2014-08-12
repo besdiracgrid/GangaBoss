@@ -587,7 +587,7 @@ class UserSplitterByRun(BossBaseSplitter):
 
 
         for runId, lum, sftVer in lums:
-            currentNum = (lum/lumAll)*evtTotal
+            currentNum = int((lum/lumAll)*evtTotal)
             logger.debug("zhangxm log: currentNum %f, evtTotal, %d\n" % (currentNum, evtTotal))
 
             i = 0
