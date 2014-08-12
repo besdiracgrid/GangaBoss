@@ -488,6 +488,7 @@ def bossjob():
         rantrgRunning = False
 
     if retCode:
+        setJobInfo('End Job with Error: %s' % retCode)
         return retCode
 
     # reconstruction
@@ -503,6 +504,7 @@ def bossjob():
         if result:
             setJobStatus('Reconstruction Error: %s' % result)
             setJobInfo('End Reconstruction with Error')
+            setJobInfo('End Job with Error: %s' % result)
             return result
 
         setJobInfo('End Reconstruction')
@@ -513,9 +515,10 @@ def bossjob():
     setJobInfo('Start Uploading Data')
     result = uploadData(lfn, se)
     if not result['OK']:
+        print >>errFile, 'Upload Data Error:\\n%s' % result
         setJobStatus('Upload Data Error')
         setJobInfo('End Uploading Data with Error')
-        print >>errFile, 'Upload Data Error:\\n%s' % result
+        setJobInfo('End Job with Error: %s' % 72)
         return 72
     setJobInfo('End Uploading Data')
 
@@ -529,10 +532,11 @@ def bossjob():
                }
     result = registerMetadata(lfn, metadata)
     if not result['OK']:
+        print >>errFile, 'Set Metadata Error:\\n%s' % result
         setJobStatus('Setting Metadata Error')
         setJobInfo('End Setting Metadata with Error')
-        print >>errFile, 'Set Metadata Error:\\n%s' % result
         removeData(lfn)
+        setJobInfo('End Job with Error: %s' % 73)
         return 73
     setJobInfo('End Set Metadata')
 
