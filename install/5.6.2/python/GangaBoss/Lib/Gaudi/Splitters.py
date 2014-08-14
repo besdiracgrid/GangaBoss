@@ -607,7 +607,8 @@ class UserSplitterByRun(BossBaseSplitter):
 
                 jobProperty['round'] = get_round_nums([(runId, runId)])[0]
 
-                self._jobProperties.append(jobProperty)
+                if jobProperty['eventNum'] > 0:
+                    self._jobProperties.append(jobProperty)
 
                 leftNum -= evtMaxPerJob
                 eventIdIni += evtMaxPerJob
