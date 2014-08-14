@@ -714,3 +714,94 @@ class BossSplitter(UserSplitterByRun):
     _schema = UserSplitterByRun._schema.inherit_copy()
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
+
+class FakeSplitterByRun(BossBaseSplitter):
+    _name = "FakeSplitterByRun"
+    _schema = BossBaseSplitter._schema.inherit_copy()
+
+    def _prepare(self, job):
+        evtMaxPerJob = self.evtMaxPerJob
+        evtTotal = self.evtTotal
+
+        (runFrom, runTo) = get_runLH(job.application.extra.run_ranges)
+
+        bossRelease = job.application.version
+        bossVer = job.application.extra.metadata.get('bossVer', 'xxx')
+        resonance = job.application.extra.metadata.get('resonance', 'unknown')
+        eventType = job.application.extra.metadata.get('eventType', 'unknown')
+        streamId = job.application.extra.metadata.get('streamId', 'streamxxx')
+        head = bossVer + '_' + resonance + '_' + eventType + '_' + streamId
+
+
+        dbuser = config["dbuser"]
+        dbpass = config["dbpass"]
+        dbhost = config["dbhost"]
+
+
+        # database for the eventId
+        connection = MySQLdb.connect(user=dbuser, passwd=dbpass, host=dbhost, db="offlinedb")
+        cursor = connection.cursor()
+
+        # database for the luminosity of all the runs
+        guest_connection = MySQLdb.connect(user="guest", passwd="guestpass", host=dbhost, db="offlinedb")
+        guest_cursor = guest_connection.cursor()
+
+        lumAll = 0
+        lums = []
+        for runRange in job.application.extra.run_ranges:
+            sql, sftVer, parVer = self._generateSQL(guest_cursor, bossRelease, runRange[0], runRange[1])
+            cursor.execute(sql)
+            for row in cursor.fetchall():
+                #CN: check that lumi > 0 
+                if row[1] > 0:
+                    lumAll = lumAll + row[1]
+                    lums.append((row[0], row[1], sftVer))
+
+        guest_cursor.close()
+        guest_connection.close()
+
+        cursor.close()
+        connection.close()
+
+
+        i = 0
+        for runId, lum, sftVer in lums:
+            i += 1
+            jobProperty = {}
+            jobProperty['filename'] = head + "_%s_%s_file%04d.rtraw" % (runId, runId, i)
+            jobProperty['eventNum'] = evtMaxPerJob
+
+            jobProperty['runFrom'] = runFrom
+            jobProperty['runTo'] = runTo
+            jobProperty['runL'] = runId
+            jobProperty['runH'] = runId
+
+            jobProperty['round'] = get_round_nums([(runId, runId)])[0]
+
+            self._jobProperties.append(jobProperty)
+
+    def _addRunEventId(self, jobProperty):
+        sopts = 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
+        return sopts
+
+    def _generateSQL(self, guest_cursor, bossRelease, runFrom, runTo):
+
+        br = bossRelease
+        if bossRelease == '6.6.4.p02':
+            br = '6.6.4.p01'
+
+        # CN: get SftVer and ParVer for this run range
+        sql = 'select SftVer, ParVer from CalVtxLumVer where BossRelease = "%s" and RunFrom <= %d and RunTo >= %d and DataType = "LumVtx";' % (br, runFrom, runTo)
+        sftVer = ""
+        parVer = ""
+        guest_cursor.execute(sql)
+        for row in guest_cursor.fetchall():
+            sftVer = row[0]
+            parVer = row[1]
+
+        # CN: generate SQL query to get RunNo and luminosity for this run range
+        sql = 'select RunNo,OfflineTwoGam from OfflineLum where RunNo >= %d and RunNo <= %d && SftVer = "%s" and ParVer = "%s";' % (runFrom, runTo, sftVer, parVer)
+
+        return sql, sftVer, parVer
+
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
