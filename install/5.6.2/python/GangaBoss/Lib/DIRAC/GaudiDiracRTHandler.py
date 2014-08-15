@@ -233,6 +233,12 @@ def cp(src, dst):
     if os.path.exists(src) and os.path.exists(dst):
         shutil.copy(src, dst)
 
+def launchPatch():
+    for f in os.listdir('.'):
+        if os.path.isfile(f) and f.endswith('.patch_for_gangaboss'):
+            os.chmod(f, 0755)
+            cmd([os.path.join('.', f)])
+
 def setJobInfo(message):
     if jobID != '0':
         info = RPCClient( 'Info/BadgerInfo' )
@@ -358,22 +364,22 @@ def startRantrgDownload():
     # download random trigger files
     setJobStatus('Downloading Random Trigger')
     disableWatchdog()
-    result = cmd(['bash', './gaudi_run.sh', bossVer])
+    result = cmd(['./gaudi_run.sh', bossVer])
     return Popen(['besdirac-dms-rantrg-get', '-j', 'options_rantrg.opts'], stdout=rantrgLogFile, stderr=rantrgErrFile)
 
 def startSimulation():
     setJobStatus('Simulation')
 
-    startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['bash', './boss_run.sh', bossVer])
+    startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['./boss_run.sh', bossVer])
     print >>logFile, startcmd
     print >>errFile, startcmd
     logFile.flush()
     errFile.flush()
 
-    return Popen(['bash', './boss_run.sh', bossVer], stdout=logFile, stderr=errFile)
+    return Popen(['./boss_run.sh', bossVer], stdout=logFile, stderr=errFile)
 
 def endSimulation():
-    endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['bash', './boss_run.sh', bossVer], '='*80)
+    endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['./boss_run.sh', bossVer], '='*80)
     print >>logFile, endcmd
     print >>errFile, endcmd
     logFile.flush()
@@ -498,9 +504,9 @@ def bossjob():
         setJobStatus('Reconstruction')
         setJobInfo('Start Reconstruction')
         if localRantrgPath:
-            result = cmd(['bash', './boss_run.sh', bossVer, 'rec', 'extra.opts'])
+            result = cmd(['./boss_run.sh', bossVer, 'rec', 'extra.opts'])
         else:
-            result = cmd(['bash', './boss_run.sh', bossVer, 'rec'])
+            result = cmd(['./boss_run.sh', bossVer, 'rec'])
 
         if result:
             setJobStatus('Reconstruction Error: %s' % result)
@@ -550,20 +556,29 @@ if __name__ == '__main__':
     sys.stdout = logFile
     sys.stderr = errFile
 
+    # file executable
+    os.chmod('boss_run.sh', 0755)
+    os.chmod('gaudi_run.sh', 0755)
+
     # prepare
     cmd(['date'])
     cmd(['uname', '-a'])
     cmd(['ls', '-ltrA'])
 
+    # patch
+    launchPatch()
+
     # before boss
-    if os.path.exists('before_boss_job'):
+    if os.path.exists('before_boss_job') and os.path.isfile('before_boss_job'):
+        os.chmod('before_boss_job', 0755)
         cmd(['./before_boss_job'])
 
     # main job process
     exitStatus = bossjob()
 
     # after boss
-    if os.path.exists('after_boss_job'):
+    if os.path.exists('after_boss_job') and os.path.isfile('after_boss_job'):
+        os.chmod('after_boss_job', 0755)
         cmd(['./after_boss_job'])
 
     # some ending job

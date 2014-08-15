@@ -92,6 +92,8 @@ class Gaudi(Francesc):
     schema['createDataset'] = SimpleItem(defvalue=True,doc=docstr)
     docstr = 'Use local random trigger files'
     schema['localRantrg'] = SimpleItem(defvalue=True,doc=docstr)
+    docstr = 'Patch files'
+    schema['patch'] = SimpleItem(defvalue=[],doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -156,6 +158,7 @@ class Gaudi(Francesc):
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
+        self._prepare_patch()
         self._prepare_metadata(parser, recoptsfiles)
 
         # write env into input dir
@@ -195,6 +198,23 @@ class Gaudi(Francesc):
         if self.metadata.has_key('streamId') and not re.match('^stream(?!0+$)\d+$', self.metadata['streamId']):
             msg = 'The streamId format is not correct: %s. It should be like "stream001" but can not be "stream000"' % self.metadata['streamId']
             raise ApplicationConfigurationError(None,msg)
+
+    def _prepare_patch(self):
+        patch_path = Ganga.Utility.Config.getConfig('Boss')['PatchPath']
+        for pf in self.patch:
+            local_patch_file = pf+'.patch'
+            system_patch_file = os.path.join(patch_path, local_patch_file)
+            if os.path.exists(local_patch_file) and os.path.isfile(local_patch_file):
+                patch_file = local_patch_file
+            elif os.path.exists(system_patch_file) and os.path.isfile(system_patch_file):
+                patch_file = os.path.join(patch_path, local_patch_file)
+            else:
+                logger.error('Cannot find the patch file: %s' % patch_file)
+                continue
+
+            f = open(patch_file)
+            self.extra.master_input_buffers[pf+'.patch_for_gangaboss'] = f.read()
+            f.close()
 
     def _prepare_metadata(self, parser, recoptsfiles):
         # deal with some metadata
