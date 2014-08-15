@@ -209,8 +209,7 @@ class Gaudi(Francesc):
             elif os.path.exists(system_patch_file) and os.path.isfile(system_patch_file):
                 patch_file = os.path.join(patch_path, local_patch_file)
             else:
-                logger.error('Cannot find the patch file: %s' % patch_file)
-                continue
+                raise ApplicationConfigurationError(None, 'Cannot find the patch file: %s' % system_patch_file)
 
             f = open(patch_file)
             self.extra.master_input_buffers[pf+'.patch_for_gangaboss'] = f.read()
