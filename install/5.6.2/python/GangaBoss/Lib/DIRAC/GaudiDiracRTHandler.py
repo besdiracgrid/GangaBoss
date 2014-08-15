@@ -395,6 +395,14 @@ def generateLocalRantrgOpt(localRantrgPath):
 def checkRantrgDownloadStatus():
     pass
 
+def checkEnvironment():
+    os.listdir('/cvmfs/boss.cern.ch')
+    if not os.path.isdir('/cvmfs/boss.cern.ch'):
+        setJobStatus('BOSS cvmfs not found')
+        return False
+
+    return True
+
 def bossjob():
     disableWatchdog()
 
@@ -573,8 +581,12 @@ if __name__ == '__main__':
         os.chmod('before_boss_job', 0755)
         cmd(['./before_boss_job'])
 
-    # main job process
-    exitStatus = bossjob()
+    # check environment
+    if checkEnvironment():
+        # main job process
+        exitStatus = bossjob()
+    else:
+        exitStatus = 70
 
     # after boss
     if os.path.exists('after_boss_job') and os.path.isfile('after_boss_job'):
