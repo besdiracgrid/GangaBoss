@@ -53,6 +53,11 @@ dscrpt = 'The RoundSearch file path'
 defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/RoundSearch.txt'
 configBoss.addOption('RoundSearchPath',defval,dscrpt)
 
+# Patch path
+dscrpt = 'The patch file path'
+defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/scripts'
+configBoss.addOption('PatchPath',defval,dscrpt)
+
 
 # Set default values for the Dirac section.
 dscrpt = 'Display DIRAC API stdout to the screen in Ganga?'
