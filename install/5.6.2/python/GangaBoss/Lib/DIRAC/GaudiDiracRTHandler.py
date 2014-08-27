@@ -396,7 +396,11 @@ def checkRantrgDownloadStatus():
     pass
 
 def checkEnvironment():
-    os.listdir('/cvmfs/boss.cern.ch')
+    try:
+        os.listdir('/cvmfs/boss.cern.ch')
+    except OSError as e:
+        print >>errFile, 'List directory "/cvmfs/boss.cern.ch" failed: %s' % e
+
     if not os.path.isdir('/cvmfs/boss.cern.ch'):
         setJobStatus('BOSS cvmfs not found')
         return False
