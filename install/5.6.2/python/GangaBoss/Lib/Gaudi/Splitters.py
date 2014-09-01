@@ -211,6 +211,7 @@ class BossBaseSplitter(ISplitter):
     _schema = Schema(Version(1,0), {
             'evtMaxPerJob': SimpleItem(defvalue=50,doc='Number of events per job'),
 	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
+	    'seed': SimpleItem(defvalue=None,typelist=['int','type(None)'],doc='Random number seed'),
             })
 
     def split(self,job):
@@ -220,7 +221,10 @@ class BossBaseSplitter(ISplitter):
         self._jobProperties = []
 
         self._prepare(job)
-        rndmSeed = self._getSeedStart()
+        if self.seed is None:
+            rndmSeed = self._getSeedStart()
+        else:
+            rndmSeed = self.seed
 
         subjobs=[]
         for jobProperty in self._jobProperties:
