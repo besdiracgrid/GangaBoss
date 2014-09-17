@@ -177,18 +177,21 @@ def getRantrgInfo(run):
 def getLocalRantrgPath():
     roundNum, dateDir, filelist = getRantrgInfo(runL)
     if not roundNum:
+        print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
         return ''
 
     diracGridType, place, country = siteName.split('.')
 
     rantrgAvailable = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Available'%(diracGridType, siteName), [])
     if roundNum not in rantrgAvailable:
+        print >>errFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
         return ''
 
     rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Locations'%(diracGridType, siteName, roundNum), [])
     if not rantrgRoundPaths:
         rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Location'%(diracGridType, siteName), '')
         if not rantrgMainPath:
+            print >>errFile, 'Local random trigger file not found: Round %s path not found in configuration' % roundNum
             return ''
         rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
 
@@ -203,6 +206,8 @@ def getLocalRantrgPath():
             break
 
     if not rantrgPath:
+        print >>errFile, 'Local random trigger file not in regular path: Try to find in %s' % rantrgRoundPaths
+
         for rantrgRoundPath in rantrgRoundPaths:
             for root,subdirs,files in os.walk(rantrgRoundPath):
                 if filelist[0] in files:
@@ -210,6 +215,9 @@ def getLocalRantrgPath():
                     break
             if rantrgPath:
                 break
+
+    if not rantrgPath:
+        print >>errFile, 'Local random trigger file not found: Random trigger file not found anywhere'
 
     return rantrgPath
 
@@ -423,22 +431,25 @@ def bossjob():
             cmd(['ls', '-ld', localRantrgPath])
             generateLocalRantrgOpt(localRantrgPath)
         else:
+            if runH > runL:
+                print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
+                setJobStatus('Can not download random trigger while split by event')
+                return 71
             setJobInfo('Start Downloading Random Trigger')
             pdRantrg = startRantrgDownload()
 
     # run simulation
     setJobInfo('Start Simulation')
     pdSimulation = startSimulation()
+    simRunning = True
 
     # 0: not started, 1: running, 2: finished ok, 3: finished with errors
-    simRunning = False
     rantrgRunning = False
 
     retCode = 0
 
     if not doReconstruction or localRantrgPath:
         # only monitor simulation
-        simRunning = True
         simRetCode = pdSimulation.wait()
         simRunning = False
         endSimulation()
@@ -451,7 +462,6 @@ def bossjob():
             setJobInfo('End Simulation')
     else:
         # monitor simulation and rantrg downloading
-        simRunning = True
         rantrgRunning = True
         while True:
             simRetCode = pdSimulation.poll()
