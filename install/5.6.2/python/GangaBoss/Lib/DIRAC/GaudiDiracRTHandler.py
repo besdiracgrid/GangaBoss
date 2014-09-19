@@ -138,7 +138,7 @@ useLocalRantrg = %s
 """ % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg)
 
     script_body = """
-def getRantrgInfo(run):
+def getRantrgInfo():
     roundNum = ''
     dateDir = ''
     filelist = []
@@ -148,7 +148,7 @@ def getRantrgInfo(run):
     try:
         conn = sqlite3.connect(sql3File)
         c = conn.cursor()
-        c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo=?", (run,))
+        c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo>=? AND RunNo<=?", (runL, runH))
         result = c.fetchall()
         conn.commit()
         conn.close()
@@ -175,7 +175,7 @@ def getRantrgInfo(run):
     return roundNum, dateDir, filelist
 
 def getLocalRantrgPath():
-    roundNum, dateDir, filelist = getRantrgInfo(runL)
+    roundNum, dateDir, filelist = getRantrgInfo()
     if not roundNum:
         print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
         return ''
