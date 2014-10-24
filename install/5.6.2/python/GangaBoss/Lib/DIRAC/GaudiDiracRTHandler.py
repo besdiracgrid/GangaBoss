@@ -157,6 +157,7 @@ def getRantrgInfo():
         return roundNum, dateDir, filelist
 
     if result:
+        # parse round number and date from directory name
         filePath = result[0][1]
         roundStart = filePath.rfind('round')
         if roundStart >= 0:
@@ -174,27 +175,42 @@ def getRantrgInfo():
 
     return roundNum, dateDir, filelist
 
-def getLocalRantrgPath():
-    roundNum, dateDir, filelist = getRantrgInfo()
-    if not roundNum:
-        print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
-        return ''
+def getRantrgRoundInfo(roundNum):
+    useNewDataDir = False
+    rantrgRoundPaths = []
 
     diracGridType, place, country = siteName.split('.')
 
+    # search for available local random trigger data from the configuration server
     rantrgAvailable = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Available'%(diracGridType, siteName), [])
     if roundNum not in rantrgAvailable:
         print >>errFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
-        return ''
+        return useNewDataDir, rantrgRoundPaths
 
-    rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Locations'%(diracGridType, siteName, roundNum), [])
-    if not rantrgRoundPaths:
-        rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Location'%(diracGridType, siteName), '')
-        if not rantrgMainPath:
-            print >>errFile, 'Local random trigger file not found: Round %s path not found in configuration' % roundNum
-            return ''
-        rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
+    # find if this round is configured individually
+    result = gConfig.getSections('/Resources/Sites/%s/%s/Data/LocalRantrg'%(diracGridType, siteName))
+    if not result['OK']:
+        print >>errFile, result['Message']
+        return useNewDataDir, rantrgRoundPaths
+    individualRounds = result['Value']
 
+    if roundNum in individualRounds:
+        useNewDataDir = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/UseNewDataDir'%(diracGridType, siteName, roundNum), False)
+        if useNewDataDir:
+            rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Locations'%(diracGridType, siteName, roundNum), [])
+    else:
+        useNewDataDir = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/UseNewDataDir'%(diracGridType, siteName), False)
+        if useNewDataDir:
+            rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Location'%(diracGridType, siteName), '')
+            if rantrgMainPath:
+                rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
+
+    if useNewDataDir and not rantrgRoundPaths:
+        print >>errFile, 'Local random trigger file not found: Round %s path not found in configuration' % roundNum
+
+    return useNewDataDir, rantrgRoundPaths
+
+def validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
     rantrgPath = ''
 
     for rantrgRoundPath in rantrgRoundPaths:
@@ -220,6 +236,20 @@ def getLocalRantrgPath():
         print >>errFile, 'Local random trigger file not found: Random trigger file not found anywhere'
 
     return rantrgPath
+
+def getLocalRantrgPath():
+    roundNum, dateDir, filelist = getRantrgInfo()
+    if not roundNum:
+        print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
+        return ''
+
+    useNewDataDir, rantrgRoundPaths = getRantrgRoundInfo(roundNum)
+
+    rantrgPath = ''
+    if useNewDataDir:
+        rantrgPath = validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
+
+    return useNewDataDir, rantrgPath
 
 def cmd(args):
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, args)
@@ -421,19 +451,24 @@ def bossjob():
     setJobInfo('Start Job')
 
     # prepare for reconstruction
+    useNewDataDir = False
     localRantrgPath = ''
     if doReconstruction:
         if useLocalRantrg:
-            localRantrgPath = getLocalRantrgPath()
+            useNewDataDir, localRantrgPath = getLocalRantrgPath()
 
         if localRantrgPath:
-            print >>logFile, 'Use local random trigger path: %s' % localRantrgPath
-            cmd(['ls', '-ld', localRantrgPath])
-            generateLocalRantrgOpt(localRantrgPath)
+            if useNewDataDir:
+                print >>logFile, 'Use local random trigger path: %s' % localRantrgPath
+                cmd(['ls', '-ld', localRantrgPath])
+                generateLocalRantrgOpt(localRantrgPath)
+            else:
+                print >>logFile, 'Use local random trigger with original path'
+                generateLocalRantrgOpt('')
         else:
             if runH > runL:
                 print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
-                setJobStatus('Can not download random trigger while split by event')
+                setJobStatus('Can not do reconstruction on this site with split by event')
                 return 71
             setJobInfo('Start Downloading Random Trigger')
             pdRantrg = startRantrgDownload()
@@ -448,7 +483,7 @@ def bossjob():
 
     retCode = 0
 
-    if not doReconstruction or localRantrgPath:
+    if not doReconstruction or not useNewDataDir or localRantrgPath:
         # only monitor simulation
         simRetCode = pdSimulation.wait()
         simRunning = False
@@ -525,7 +560,7 @@ def bossjob():
         # run rec
         setJobStatus('Reconstruction')
         setJobInfo('Start Reconstruction')
-        if localRantrgPath:
+        if not useNewDataDir or localRantrgPath:
             result = cmd(['./boss_run.sh', bossVer, 'rec', 'extra.opts'])
         else:
             result = cmd(['./boss_run.sh', bossVer, 'rec'])
