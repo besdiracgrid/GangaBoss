@@ -69,6 +69,8 @@ source scripts/${bossVer}/setup.sh
 source dist/${bossVer}/TestRelease/*/cmt/setup.sh
 cd $OLDPWD
 
+export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so_3:$LD_LIBRARY_PATH
+
 gaudirun.py -n -v -o ${prefix}options.opts ${prefix}options.pkl ${prefix}data.py ${extrapy}
 boss.exe ${prefix}options.opts 1>>${prefix}bosslog 2>>${prefix}bosserr
 result=$?
