@@ -744,6 +744,10 @@ class GaudiDiracRTHandler(IRuntimeHandler):
     def master_prepare(self,app,appconfig):
         app.extra.master_input_buffers['gaudi_run.sh'] = gaudi_run_wrapper()
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
+
+        self._boss_patch(app)
+        self._create_patch_script(app)
+
         sandbox = get_master_input_sandbox(app.getJobObject(),app.extra) 
         c = StandardJobConfig('',sandbox,[],[],None)
         return c
@@ -801,6 +805,39 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         c.script = dirac_script
         return c
+
+    def _boss_patch(self,app):
+        if app.useBossPatch:
+            boss_patch = Ganga.Utility.Config.getConfig('Boss')['BossPatch']
+            if os.path.exists(boss_patch) and os.path.isfile(boss_patch):
+                try:
+                    f = open(boss_patch)
+                    boss_conf = eval(f.read())
+                    f.close()
+                except Exception as e:
+                    raise ApplicationConfigurationError(None, 'Invalid configuration file: %s. Error: %s' % (boss_patch, e))
+
+                if app.version in boss_conf['Boss']:
+                    logger.error("Patch for Boss version %s: %s" % (app.version, boss_conf['Boss'][app.version]))
+                    app.patch += boss_conf['Boss'][app.version]
+            else:
+                raise ApplicationConfigurationError(None, 'Cannot find the Boss patch configuration file: %s' % boss_patch)
+
+    def _create_patch_script(self,app):
+        patch_path = Ganga.Utility.Config.getConfig('Boss')['PatchPath']
+        for pf in app.patch:
+            local_patch_file = pf+'.patch'
+            system_patch_file = os.path.join(patch_path, local_patch_file)
+            if os.path.exists(local_patch_file) and os.path.isfile(local_patch_file):
+                patch_file = local_patch_file
+            elif os.path.exists(system_patch_file) and os.path.isfile(system_patch_file):
+                patch_file = os.path.join(patch_path, local_patch_file)
+            else:
+                raise ApplicationConfigurationError(None, 'Cannot find the patch file: %s' % system_patch_file)
+
+            f = open(patch_file)
+            app.extra.master_input_buffers[pf+'.patch_for_gangaboss'] = f.read()
+            f.close()
 
     def _create_gaudi_script(self,app):
         '''Creates the script that will be executed by DIRAC job. '''

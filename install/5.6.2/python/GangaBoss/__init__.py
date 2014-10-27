@@ -58,6 +58,11 @@ dscrpt = 'The patch file path'
 defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/scripts'
 configBoss.addOption('PatchPath',defval,dscrpt)
 
+# Boss Patch
+dscrpt = 'Boss patch conf'
+defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/scripts/Boss.conf'
+configBoss.addOption('BossPatch',defval,dscrpt)
+
 
 # Set default values for the Dirac section.
 dscrpt = 'Display DIRAC API stdout to the screen in Ganga?'
