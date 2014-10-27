@@ -818,7 +818,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
                     raise ApplicationConfigurationError(None, 'Invalid configuration file: %s. Error: %s' % (boss_patch, e))
 
                 if app.version in boss_conf['Boss']:
-                    logger.error("Patch for Boss version %s: %s" % (app.version, boss_conf['Boss'][app.version]))
+                    logger.debug("Patch for Boss version %s: %s" % (app.version, boss_conf['Boss'][app.version]))
                     app.patch += boss_conf['Boss'][app.version]
             else:
                 raise ApplicationConfigurationError(None, 'Cannot find the Boss patch configuration file: %s' % boss_patch)
