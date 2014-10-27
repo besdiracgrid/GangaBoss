@@ -762,8 +762,6 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
         opts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database";\n' % app.version
-        if app.version in ['6.6.2', '6.6.3.p01']:
-            opts += 'MdcTunningSvc.Host = "202.122.33.120";'
         app.extra.input_buffers['data.opts'] += opts
 
         # extra lines for reconstruction and remove empty files
