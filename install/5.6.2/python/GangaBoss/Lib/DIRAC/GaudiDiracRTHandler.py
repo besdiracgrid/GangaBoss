@@ -178,7 +178,7 @@ def getRantrgInfo():
     return roundNum, dateDir, filelist
 
 def getRantrgRoundInfo(roundNum):
-    useNewDataDir = False
+    rantrgMethod = ''
     rantrgRoundPaths = []
 
     diracGridType, place, country = siteName.split('.')
@@ -187,30 +187,30 @@ def getRantrgRoundInfo(roundNum):
     rantrgAvailable = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Available'%(diracGridType, siteName), [])
     if roundNum not in rantrgAvailable:
         print >>errFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
-        return useNewDataDir, rantrgRoundPaths
+        return rantrgMethod, rantrgRoundPaths
 
     # find if this round is configured individually
     result = gConfig.getSections('/Resources/Sites/%s/%s/Data/LocalRantrg'%(diracGridType, siteName))
     if not result['OK']:
         print >>errFile, result['Message']
-        return useNewDataDir, rantrgRoundPaths
+        return rantrgMethod, rantrgRoundPaths
     individualRounds = result['Value']
 
     if roundNum in individualRounds:
-        useNewDataDir = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/UseNewDataDir'%(diracGridType, siteName, roundNum), False)
-        if useNewDataDir:
-            rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Locations'%(diracGridType, siteName, roundNum), [])
+        rantrgMethod = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Method'%(diracGridType, siteName, roundNum), '')
+        if rantrgMethod in ['New', 'Replace']:
+            rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Paths'%(diracGridType, siteName, roundNum), [])
     else:
-        useNewDataDir = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/UseNewDataDir'%(diracGridType, siteName), False)
-        if useNewDataDir:
-            rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Location'%(diracGridType, siteName), '')
+        rantrgMethod = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Method'%(diracGridType, siteName), '')
+        if rantrgMethod in ['New', 'Replace']:
+            rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Path'%(diracGridType, siteName), '')
             if rantrgMainPath:
                 rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
 
-    if useNewDataDir and not rantrgRoundPaths:
+    if rantrgMethod in ['New', 'Replace'] and not rantrgRoundPaths:
         print >>errFile, 'Local random trigger file not found: Round %s path not found in configuration' % roundNum
 
-    return useNewDataDir, rantrgRoundPaths
+    return rantrgMethod, rantrgRoundPaths
 
 def validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
     rantrgPath = ''
@@ -245,13 +245,13 @@ def getLocalRantrgPath():
         print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
         return ''
 
-    useNewDataDir, rantrgRoundPaths = getRantrgRoundInfo(roundNum)
+    rantrgMethod, rantrgRoundPaths = getRantrgRoundInfo(roundNum)
 
     rantrgPath = ''
-    if useNewDataDir:
+    if rantrgMethod == 'New':
         rantrgPath = validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
 
-    return useNewDataDir, rantrgPath
+    return rantrgMethod, rantrgPath
 
 def cmd(args):
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, args)
@@ -427,9 +427,10 @@ def endSimulation():
 
 #    setJobStatus('Simulation Finished')
 
-def generateLocalRantrgOpt(localRantrgPath):
+def generateLocalRantrgOpt(replacePath='', newPath=''):
     extraOptFile = open('extra.opts', 'w')
-    extraOptFile.write('MixerAlg.UseNewDataDir = "%s";\\n' % localRantrgPath)
+    extraOptFile.write('MixerAlg.ReplaceDataPath = "%s";\\n' % replacePath)
+    extraOptFile.write('MixerAlg.UseNewDataDir = "%s";\\n' % newPath)
     extraOptFile.close()
 
 def checkRantrgDownloadStatus():
@@ -453,21 +454,27 @@ def bossjob():
     setJobInfo('Start Job')
 
     # prepare for reconstruction
-    useNewDataDir = False
+    rantrgMethod = ''
     localRantrgPath = ''
     if doReconstruction:
         if useLocalRantrg:
-            useNewDataDir, localRantrgPath = getLocalRantrgPath()
+            rantrgMethod, localRantrgPath = getLocalRantrgPath()
 
-        if localRantrgPath:
-            if useNewDataDir:
+            print >>logFile, 'rantrgMethod: %s' % rantrgMethod
+            print >>logFile, 'localRantrgPath: %s' % localRantrgPath
+
+            if rantrgMethod == 'New':
                 print >>logFile, 'Use local random trigger path: %s' % localRantrgPath
                 cmd(['ls', '-ld', localRantrgPath])
-                generateLocalRantrgOpt(localRantrgPath)
-            else:
-                print >>logFile, 'Use local random trigger with original path'
-                generateLocalRantrgOpt('')
-        else:
+                generateLocalRantrgOpt(newPath=localRantrgPath)
+            elif rantrgMethod == 'Replace':
+                print >>logFile, 'Replace local random trigger path: %s' % localRantrgPath
+                generateLocalRantrgOpt(replacePath=localRantrgPath)
+            elif rantrgMethod == 'Default':
+                print >>logFile, 'Use local random trigger with default path'
+                generateLocalRantrgOpt()
+
+        if not rantrgMethod:
             if runH > runL:
                 print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
                 setJobStatus('Can not do reconstruction on this site with split by event')
@@ -485,7 +492,7 @@ def bossjob():
 
     retCode = 0
 
-    if not doReconstruction or not useNewDataDir or localRantrgPath:
+    if not doReconstruction or rantrgMethod:
         # only monitor simulation
         simRetCode = pdSimulation.wait()
         simRunning = False
@@ -562,7 +569,7 @@ def bossjob():
         # run rec
         setJobStatus('Reconstruction')
         setJobInfo('Start Reconstruction')
-        if not useNewDataDir or localRantrgPath:
+        if rantrgMethod:
             result = cmd(['./boss_run.sh', bossVer, 'rec', 'extra.opts'])
         else:
             result = cmd(['./boss_run.sh', bossVer, 'rec'])
