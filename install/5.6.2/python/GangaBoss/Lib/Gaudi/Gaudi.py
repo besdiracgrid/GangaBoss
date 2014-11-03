@@ -71,6 +71,9 @@ class Gaudi(Francesc):
     docstr = 'The name of the rec optionsfile. '
     schema['recoptsfile'] =  FileItem(sequence=1,strict_sequence=0,defvalue=[],
                                    doc=docstr)
+    docstr = 'The name of the ana optionsfile. '
+    schema['anaoptsfile'] =  FileItem(sequence=1,strict_sequence=0,defvalue=[],
+                                   doc=docstr)
     docstr = 'The name of the Gaudi application (e.g. "DaVinci", "Gauss"...)'
     schema['appname'] = SimpleItem(defvalue=None,typelist=['str','type(None)'],
                                    hidden=1,doc=docstr)
@@ -112,10 +115,13 @@ class Gaudi(Francesc):
         inputs = self._check_inputs()         
         optsfiles = [fileitem.name for fileitem in self.optsfile]
         recoptsfiles = [fileitem.name for fileitem in self.recoptsfile]
+        anaoptsfiles = [fileitem.name for fileitem in self.anaoptsfile]
         try:
             parser = PythonOptionsParser(optsfiles,self.extraopts,self.shell)
             if recoptsfiles:
                 recparser = PythonOptionsParser(recoptsfiles,self.extraopts,self.shell)
+                if anaoptsfiles:
+                    anaparser = PythonOptionsParser(anaoptsfiles,self.extraopts,self.shell)
         except ApplicationConfigurationError, e:
             debug_dir = job.getDebugWorkspace().getPath()
             f = open(debug_dir + '/gaudirun.stdout','w')
@@ -139,6 +145,12 @@ class Gaudi(Francesc):
             file_recpkl=open(recscript,'w')
             file_recpkl.write(recparser.opts_pkl_str)
             file_recpkl.close()
+            if anaoptsfiles:
+                self.extra.master_input_buffers['anaoptions.pkl'] = anaparser.opts_pkl_str
+                anascript = "%s/anaoptions.pkl" % job.getInputWorkspace().getPath()
+                file_anapkl=open(anascript,'w')
+                file_anapkl.write(anaparser.opts_pkl_str)
+                file_anapkl.close()
         inputdata = parser.get_input_data()
   
         # If user specified a dataset, ignore optsfile data but warn the user.
@@ -152,7 +164,9 @@ class Gaudi(Francesc):
                 logger.info('Using the inputdata defined in the options file.')
                 self.extra.inputdata = inputdata
         
-        if recoptsfiles:
+        if anaoptsfiles:
+           self.extra.outputsandbox,outputdata = anaparser.get_output(job)
+        elif recoptsfiles:
            self.extra.outputsandbox,outputdata = recparser.get_output(job)
         else:
            self.extra.outputsandbox,outputdata = parser.get_output(job)
@@ -160,7 +174,14 @@ class Gaudi(Francesc):
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
-        self._prepare_metadata(parser, recoptsfiles)
+
+        if anaoptsfiles:
+            dataType = 'root'
+        elif recoptsfiles:
+            dataType = 'dst'
+        else:
+            dataType = 'rtraw'
+        self._prepare_metadata(parser, dataType)
 
         # write env into input dir
         input_dir = job.getInputWorkspace().getPath()
@@ -200,12 +221,12 @@ class Gaudi(Francesc):
             msg = 'The streamId format is not correct: %s. It should be like "stream001" but can not be "stream000"' % self.metadata['streamId']
             raise ApplicationConfigurationError(None,msg)
 
-    def _prepare_metadata(self, parser, recoptsfiles):
+    def _prepare_metadata(self, parser, dataType):
         # deal with some metadata
         self.extra.metadata = self.metadata.copy()
         self.extra.metadata['bossVer'] = self.version.replace('.', '')
 #        self.extra.metadata['round'] = parser.get_round_num()  # the round could vary with different runs
-        self.extra.metadata['dataType'] = 'dst' if recoptsfiles else 'rtraw'
+        self.extra.metadata['dataType'] = dataType
 
         # the joboption and decay card
         self.extra.run_ranges = parser.get_run_range()

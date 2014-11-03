@@ -233,6 +233,8 @@ class BossBaseSplitter(ISplitter):
             self._createSimJob(subjob, jobProperty, rndmSeed)
             if job.application.recoptsfile:
                 self._createRecJob(subjob, jobProperty, rndmSeed)
+                if job.application.anaoptsfile:
+                    self._createAnaJob(subjob, jobProperty)
 
             subjob.application.extra.metadata['round']    = jobProperty['round']
             subjob.application.extra.metadata['runFrom']  = jobProperty['runFrom']
@@ -250,10 +252,11 @@ class BossBaseSplitter(ISplitter):
         return ''
 
     def _createSimJob(self, job, jobProperty, rndmSeed):
+        simfilename = os.path.splitext(jobProperty['filename'])[0] + '.rtraw' 
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("data.opts")\n'
         sopts = self._addRunEventId(jobProperty)
-        sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % jobProperty['filename']
+        sopts += 'RootCnvSvc.digiRootOutputFile = "%s.rtraw";\n' % jobProperty['filename']
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
         logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
@@ -263,24 +266,39 @@ class BossBaseSplitter(ISplitter):
         job.application.runL = jobProperty['runL']
         job.application.runH = jobProperty['runH']
         job.application.eventNumber = jobProperty['eventNum']
+
 #        job.application.extra.outputdata.location = fcdir
-        job.application.extra.outputdata.files = jobProperty['filename']
-        job.application.outputfile = jobProperty['filename']
+        job.application.extra.outputdata.files = simfilename
+        job.application.outputfile = simfilename
 
     def _createRecJob(self, job, jobProperty, rndmSeed):
+        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.dst' 
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("recdata.opts")\n'
-        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % jobProperty['filename']
-        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.dst' 
+        sopts = 'EventCnvSvc.digiRootInputFile = {"%s.rtraw"};\n' % jobProperty['filename']
         sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfilename
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        logger.debug("zhangxm log: data.opts:%s", sopts)
+        logger.debug("zhangxm log: recdata.opts:%s", sopts)
         job.application.extra.input_buffers['recdata.opts'] += sopts
         job.application.extra.input_buffers['recdata.py'] += opts
 
         job.application.extra.outputdata.files = recfilename
         job.application.outputfile = recfilename
+
+    def _createAnaJob(self, job, jobProperty):
+        anafilename = os.path.splitext(jobProperty['filename'])[0] + '.root' 
+        opts = 'from Gaudi.Configuration import * \n'
+        opts += 'importOptions("anadata.opts")\n'
+        sopts = 'EventCnvSvc.digiRootInputFile = {"%s.dst"};\n' % jobProperty['filename']
+        sopts += 'NTupleSvc.Output = { "FILE1 DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % anafilename
+        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        logger.debug("zhangxm log: anadata.opts:%s", sopts)
+        job.application.extra.input_buffers['anadata.opts'] += sopts
+        job.application.extra.input_buffers['anadata.py'] += opts
+
+        job.application.extra.outputdata.files = anafilename
+        job.application.outputfile = anafilename
 
     def _getSeedStart(self):
         dbuser = config["dbuser"]
@@ -600,7 +618,7 @@ class UserSplitterByRun(BossBaseSplitter):
             while leftNum > 0:
                 i += 1
                 jobProperty = {}
-                jobProperty['filename'] = head + "_%s_%s_file%04d.rtraw" % (runId, runId, i)
+                jobProperty['filename'] = head + "_%s_%s_file%04d" % (runId, runId, i)
                 jobProperty['eventNum'] = evtMaxPerJob if leftNum > evtMaxPerJob else leftNum
 
                 jobProperty['runFrom'] = runFrom
@@ -699,7 +717,7 @@ class UserSplitterByEvent(BossBaseSplitter):
         while leftNum > 0:
             i += 1
             jobProperty = {}
-            jobProperty['filename'] = head + "_file%04d.rtraw" % i
+            jobProperty['filename'] = head + "_file%04d" % i
             jobProperty['eventNum'] = evtMaxPerJob if leftNum > evtMaxPerJob else leftNum
 
             jobProperty['runFrom'] = runFrom
@@ -773,7 +791,7 @@ class FakeSplitterByRun(BossBaseSplitter):
         for runId, lum, sftVer in lums:
             i += 1
             jobProperty = {}
-            jobProperty['filename'] = head + "_%s_%s_file%04d.rtraw" % (runId, runId, i)
+            jobProperty['filename'] = head + "_%s_%s_file%04d" % (runId, runId, i)
             jobProperty['eventNum'] = evtMaxPerJob
 
             jobProperty['runFrom'] = runFrom

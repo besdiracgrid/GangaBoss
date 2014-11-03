@@ -273,7 +273,9 @@ class GaudiExtras:
         self.metadata = {}
         self.input_buffers['data.py'] = ''
         self.input_buffers['recdata.py'] = ''
+        self.input_buffers['anadata.py'] = ''
         self.input_buffers['data.opts'] = ''
         self.input_buffers['recdata.opts'] = ''
+        self.input_buffers['anadata.opts'] = ''
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#

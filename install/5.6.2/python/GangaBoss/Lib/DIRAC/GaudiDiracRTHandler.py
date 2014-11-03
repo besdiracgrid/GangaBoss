@@ -117,6 +117,7 @@ fcc = FileCatalogClient(fccType)
 from DIRAC.Core.DISET.RPCClient                      import RPCClient
 
 doReconstruction = os.path.exists('recoptions.pkl')
+doAnalysis = os.path.exists('anaoptions.pkl')
 delDisableWatchdog = False
 
 logFile = open('script.log', 'w')
@@ -369,6 +370,8 @@ def uploadLog(loglfn, se):
     cp('bosserr', logdir)
     cp('recbosslog', logdir)
     cp('recbosserr', logdir)
+    cp('anabosslog', logdir)
+    cp('anabosserr', logdir)
     cp('script.log', logdir)
     cp('script.err', logdir)
     cp('rantrg.log', logdir)
@@ -582,6 +585,21 @@ def bossjob():
 
         setJobInfo('End Reconstruction')
 
+    # analysis
+    if doAnalysis:
+        # run ana
+        setJobStatus('Analysis')
+        setJobInfo('Start Analysis')
+        result = cmd(['./boss_run.sh', bossVer, 'ana'])
+
+        if result:
+            setJobStatus('Analysis Error: %s' % result)
+            setJobInfo('End Analysis with Error')
+            setJobInfo('End Job with Error: %s' % result)
+            return result
+
+        setJobInfo('End Analysis')
+
 
     # upload file and reg
     setJobStatus('Uploading Data')
@@ -778,12 +796,19 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         # extra lines for reconstruction and remove empty files
         if app.recoptsfile:
             app.extra.input_buffers['recdata.opts'] += opts
-            opts = 'MixerAlg.UseNewDataDir = ".";\n'
-            app.extra.input_buffers['recdata.opts'] += opts
+            extraopts = 'MixerAlg.UseNewDataDir = ".";\n'
+            app.extra.input_buffers['recdata.opts'] += extraopts
         else:
             app.extra.input_buffers.pop('recdata.opts', None)
             app.extra.input_buffers.pop('recdata.py', None)
 
+        # extra lines for analysis and remove empty files
+        if app.anaoptsfile:
+            app.extra.input_buffers['anadata.opts'] += opts
+            app.extra.input_buffers['anadata.opts'] += opts
+        else:
+            app.extra.input_buffers.pop('anadata.opts', None)
+            app.extra.input_buffers.pop('anadata.py', None)
 
         if app.extra.inputdata and app.extra.inputdata.hasLFNs():        
             cat_opts = '\nFileCatalog().Catalogs = ' \
@@ -794,7 +819,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         script = self._create_boss_script(app)
 #        script = self._create_bossold_script(app)
         sandbox = get_input_sandbox(app.extra)
-        app.extra.outputsandbox += ['script.log', 'script.err', 'rantrg.log', 'rantrg.err', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr']
+        app.extra.outputsandbox += ['script.log', 'script.err', 'rantrg.log', 'rantrg.err', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr', 'anabosslog', 'anabosserr']
         outputsandbox = app.extra.outputsandbox 
         c = StandardJobConfig(script,sandbox,[],outputsandbox,None)
 
@@ -850,7 +875,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         '''Creates the script that will be executed by DIRAC job. '''
         commandline = "'python ./gaudipython-wrapper.py'"
         if is_gaudi_child(app):
-            commandline = "'boss.exe  jobOptions_sim.txt'"
+            commandline = "'boss.exe jobOptions_sim.txt'"
         logger.debug('Command line: %s: ', commandline)
         wrapper = gaudi_dirac_wrapper(commandline)
         #logger.error("zhangxm log: gaudi-script.py: %s" % wrapper)
