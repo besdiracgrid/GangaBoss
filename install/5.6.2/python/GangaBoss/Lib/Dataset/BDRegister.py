@@ -165,7 +165,7 @@ class DfcOperation:
         datasetName = '%s_%s_%s_%s_%s_%s_%s_%s_%s' % (self._getDatasetPrefix(),
                                                       metaDic['resonance'], metaDic['bossVer'], metaDic['eventType'], metaDic['round'],
                                                       runFrom, runTo, metaDic['streamId'], metaDic['dataType'])
-        result = self.client.addDataset(datasetName, metaDic)
+        result = self.client.addDataset('/dataset/'+datasetName, metaDic)
         if not result['OK']:
             logger.warning("Can not create dataset: %s", result['Message'])
 
