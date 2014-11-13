@@ -129,6 +129,8 @@ jobID = os.environ.get('DIRACJOBID', '0')
 siteName = DIRAC.siteName()
 hostname = socket.gethostname()
 
+logJobInfo = False
+
 bossVer = '%s'
 lfn = '%s'
 loglfn = '%s'
@@ -281,7 +283,7 @@ def launchPatch():
             cmd([os.path.join('.', f)])
 
 def setJobInfo(message):
-    if jobID != '0':
+    if logJobInfo and jobID != '0':
         info = RPCClient( 'Info/BadgerInfo' )
         result = info.addJobLog( int(jobID), siteName, hostname, eventNumber, message )
         if not result['OK']:
