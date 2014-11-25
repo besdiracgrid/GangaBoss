@@ -11,6 +11,17 @@ from GangaBoss.Lib.Dataset.BDRegister import BDRegister
 from Ganga.GPIDev.Lib.File import FileBuffer, File
 from Ganga.Utility.Shell import Shell
 
+from DIRAC.Core.Base import Script
+Script.initialize()
+
+from DIRAC.Interfaces.API.Dirac import Dirac
+dirac = Dirac()
+
+from DIRAC.Resources.Catalog.FileCatalogClient import FileCatalogClient
+fcc = FileCatalogClient('DataManagement/FileCatalog')
+
+import hashlib
+
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
 def gaudi_dirac_wrapper(cmdline):
@@ -93,10 +104,10 @@ if [ ! -f $outputfile ]; then
 fi
 """
 
-def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg):
+def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
     script_head = """#!/usr/bin/env python
 
-import os, sys, shutil, re, time, random, socket
+import os, sys, shutil, re, time, datetime, random, socket
 from subprocess import Popen, call
 
 import DIRAC
@@ -139,8 +150,9 @@ eventNumber = %s
 runL = %s
 runH = %s
 useLocalRantrg = %s
+autoDownload = %s
 
-""" % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg)
+""" % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
 
     script_body = """
 def getRantrgInfo():
@@ -275,6 +287,17 @@ def cmd(args):
 def cp(src, dst):
     if os.path.exists(src) and os.path.exists(dst):
         shutil.copy(src, dst)
+
+def launchInputDownload():
+    for fileName, fileAttr in autoDownload.items():
+        print >>logFile, 'Downloading %s from %s ...' % (fileName, fileAttr[0])
+        result = dirac.getFile(fileAttr[0])
+        if not (result['OK'] and result['Value']['Successful']):
+            print >>errFile, 'launchInputDownload failed download %s' % fileAttr[0]
+            return False
+        os.rename(os.path.basename(fileAttr[0]), fileName)
+        os.chmod(fileName, fileAttr[1])
+    return True
 
 def launchPatch():
     for f in os.listdir('.'):
@@ -651,6 +674,10 @@ if __name__ == '__main__':
     cmd(['uname', '-a'])
     cmd(['ls', '-ltrA'])
 
+    # auto download
+    if not launchInputDownload():
+        sys.exit(74)
+
     # patch
     launchPatch()
 
@@ -767,11 +794,13 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
     def __init__(self):
         self._allRound = []
+        self._autoDownload = {}
 
     def master_prepare(self,app,appconfig):
         app.extra.master_input_buffers['gaudi_run.sh'] = gaudi_run_wrapper()
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
 
+        self._boss_auto_upload(app)
         self._boss_patch(app)
         self._create_patch_script(app)
 
@@ -785,7 +814,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             dfcDir = bdr.createFileDir()
             bdr.createLogDir()
             app.add_output_dir(dfcDir)
-            if app.createDataset:
+            if app.create_dataset:
                 dataset_name = bdr.createDataset()
                 app.add_dataset_name(dataset_name)
             self._allRound.append(app.extra.metadata['round'])
@@ -840,8 +869,42 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         c.script = dirac_script
         return c
 
+    def _upload_to_se(self, local_path, remote_path, se):
+        result = fcc.isFile(remote_path)
+        # File already exist
+        if result['OK'] and remote_path in result['Value']['Successful'] and result['Value']['Successful'][remote_path]:
+            logger.debug('File %s already exist' % remote_path)
+            return True
+
+        result = dirac.addFile(remote_path, local_path, se)
+        if not (result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(remote_path)):
+            logger.error('Auto upload file failed to: %s' % remote_path)
+            return False
+
+        logger.debug('File auto uploaded to: %s' % remote_path)
+        return True
+
+    def _upload_file(self, local_path, remote_dir, se):
+        hashfile = open(local_path, 'rb')
+        hash_name = hashlib.sha256(hashfile.read()).hexdigest()
+        hashfile.close()
+        remote_path = os.path.join(remote_dir, hash_name)
+        if not self._upload_to_se(local_path, remote_path, se):
+            return ''
+        return remote_path
+
+    def _boss_auto_upload(self,app):
+        bdr = BDRegister(app.extra.metadata)
+        remote_dir = bdr.getUploadDirName()
+        se = Ganga.Utility.Config.getConfig('Boss')['AutoUploadSE']
+        for auto_upload_file in app.auto_upload:
+            remote_path = self._upload_file(auto_upload_file, remote_dir, se)
+            if not remote_path:
+                raise ApplicationConfigurationError(None, 'Cannot upload file %s to %s' % (auto_upload_file, se))
+            self._autoDownload[os.path.basename(auto_upload_file)] = [remote_path, os.stat(auto_upload_file).st_mode & 0777]
+
     def _boss_patch(self,app):
-        if app.useBossPatch:
+        if app.use_boss_patch:
             boss_patch = Ganga.Utility.Config.getConfig('Boss')['BossPatch']
             if os.path.exists(boss_patch) and os.path.isfile(boss_patch):
                 try:
@@ -896,7 +959,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         lfn = os.path.join(app.extra.outputdata.location, app.outputfile)
         loglfn = os.path.join(bdr.getLogDirName(), app.outputfile + '.log.tar.gz')
         wrapper = boss_script_wrapper(app.version, lfn, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
-                                      app.eventNumber, app.runL, app.runH, app.localRantrg)
+                                      app.eventNumber, app.runL, app.runH, app.local_rantrg, self._autoDownload)
         j = app.getJobObject()
         script = os.path.join(j.getInputWorkspace().getPath(), "boss_dirac.py")
         file=open(script,'w')

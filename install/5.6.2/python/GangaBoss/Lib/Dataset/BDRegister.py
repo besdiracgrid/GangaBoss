@@ -61,6 +61,9 @@ RecoToDST-07/90000000/DST" ,
         metaDic['dataType'] = 'log'
         return self.dfcOperation.getDirName(metaDic)
 
+    def getUploadDirName(self):
+        return self.dfcOperation.getUserRootDir() + '/Upload'
+
     def createFileDir(self):
         '''create directory for the dataset'''
         return self.dfcOperation.createDir(self.metadata)

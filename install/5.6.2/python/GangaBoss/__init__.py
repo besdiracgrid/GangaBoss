@@ -63,6 +63,11 @@ dscrpt = 'Boss patch conf'
 defval = '/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/scripts/Boss.conf'
 configBoss.addOption('BossPatch',defval,dscrpt)
 
+# Boss auto upload
+dscrpt = 'Boss auto upload SE'
+defval = 'BES-USER-NEW'
+configBoss.addOption('AutoUploadSE',defval,dscrpt)
+
 
 # Set default values for the Dirac section.
 dscrpt = 'Display DIRAC API stdout to the screen in Ganga?'

@@ -90,15 +90,19 @@ class Gaudi(Francesc):
     schema['metadata'] = SimpleItem(defvalue={},doc=docstr) 
     _schema = Schema(Version(2, 1), schema)
     docstr = 'Long idle job'
-    schema['longIdle'] = SimpleItem(defvalue=False,doc=docstr)
+    schema['long_idle'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Create dataset'
-    schema['createDataset'] = SimpleItem(defvalue=True,doc=docstr)
+    schema['create_dataset'] = SimpleItem(defvalue=True,doc=docstr)
     docstr = 'Use local random trigger files'
-    schema['localRantrg'] = SimpleItem(defvalue=True,doc=docstr)
+    schema['local_rantrg'] = SimpleItem(defvalue=True,doc=docstr)
     docstr = 'Patch files'
     schema['patch'] = SimpleItem(defvalue=[],doc=docstr)
     docstr = 'Use patch for BOSS'
-    schema['useBossPatch'] = SimpleItem(defvalue=True,doc=docstr)
+    schema['use_boss_patch'] = SimpleItem(defvalue=True,doc=docstr)
+    docstr = 'Auto upload files'
+    schema['auto_upload'] = SimpleItem(defvalue=[],doc=docstr)
+    docstr = 'User workarea'
+    schema['user_workarea'] = SimpleItem(defvalue='',doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -175,6 +179,8 @@ class Gaudi(Francesc):
 
         self._validate_input()
 
+        self._auto_upload_workarea()
+
         if anaoptsfiles:
             dataType = 'root'
         elif recoptsfiles:
@@ -220,6 +226,12 @@ class Gaudi(Francesc):
         if self.metadata.has_key('streamId') and not re.match('^stream(?!0+$)\d+$', self.metadata['streamId']):
             msg = 'The streamId format is not correct: %s. It should be like "stream001" but can not be "stream000"' % self.metadata['streamId']
             raise ApplicationConfigurationError(None,msg)
+
+    def _auto_upload_workarea(self):
+        if self.user_workarea:
+            platform = get_user_platform()
+            lib_dir = os.path.join(self.user_workarea, 'InstallArea', platform, 'lib')
+            print 'lib dir: %s' % lib_dir
 
     def _prepare_metadata(self, parser, dataType):
         # deal with some metadata
