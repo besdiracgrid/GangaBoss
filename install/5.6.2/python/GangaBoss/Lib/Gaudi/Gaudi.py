@@ -99,6 +99,8 @@ class Gaudi(Francesc):
     schema['patch'] = SimpleItem(defvalue=[],doc=docstr)
     docstr = 'Use patch for BOSS'
     schema['useBossPatch'] = SimpleItem(defvalue=True,doc=docstr)
+    docstr = 'Output root directory'
+    schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -174,6 +176,10 @@ class Gaudi(Francesc):
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
+
+        if self.output_rootdir:
+            bdr = BDRegister(self.extra.metadata)
+            bdr.setRootDir(self.output_rootdir)
 
         if anaoptsfiles:
             dataType = 'root'
