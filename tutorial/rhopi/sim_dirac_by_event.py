@@ -1,5 +1,5 @@
 # ganga job for simulation only
-bossVersion = '6.6.4.p01'
+bossVersion = '6.6.4.p02'
 optionsFile = 'jobOptions_sim_rhopi.txt'
 jobGroup = 'sim_rhopi_140512'
 metadata = {'resonance': 'jpsi', 'eventType': 'rhopi'}
