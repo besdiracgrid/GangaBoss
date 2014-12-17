@@ -3,7 +3,7 @@ bossVersion = '6.6.4.p02'
 optionsFile = 'jobOptions_sim_rhopi.txt'
 recOptionsFile = 'jobOptions_rec_rhopi.txt'
 anaOptionsFile = 'jobOptions_ana_rhopi.txt'
-jobGroup = 'simrec_rhopi_140512'
+jobGroup = 'simrecana_rhopi_140512'
 metadata = {'resonance': 'jpsi', 'eventType': 'rhopi'}
 splitter = UserSplitterByRun(evtMaxPerJob = 100, evtTotal = 100*10)
 
