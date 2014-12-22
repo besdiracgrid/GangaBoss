@@ -20,6 +20,8 @@ dirac = Dirac()
 from DIRAC.Resources.Catalog.FileCatalogClient import FileCatalogClient
 fcc = FileCatalogClient('DataManagement/FileCatalog')
 
+import shutil
+import tarfile
 import hashlib
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
@@ -107,7 +109,7 @@ fi
 def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
     script_head = """#!/usr/bin/env python
 
-import os, sys, shutil, re, time, datetime, random, socket
+import os, sys, shutil, re, time, datetime, random, socket, tarfile
 from subprocess import Popen, call
 
 import DIRAC
@@ -150,7 +152,7 @@ eventNumber = %s
 runL = %s
 runH = %s
 useLocalRantrg = %s
-autoDownload = %s
+autoDownload = '%s'
 
 """ % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
 
@@ -161,7 +163,7 @@ def getRantrgInfo():
     filelist = []
 
     import sqlite3
-    sql3File = '/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database/offlinedb.db' % bossVer
+    sql3File = '/cvmfs/boss.cern.ch/slc5_amd64_gcc43/database/offlinedb.db'
     try:
         conn = sqlite3.connect(sql3File)
         c = conn.cursor()
@@ -289,14 +291,16 @@ def cp(src, dst):
         shutil.copy(src, dst)
 
 def launchInputDownload():
-    for fileName, fileAttr in autoDownload.items():
-        print >>logFile, 'Downloading %s from %s ...' % (fileName, fileAttr[0])
-        result = dirac.getFile(fileAttr[0])
-        if not (result['OK'] and result['Value']['Successful']):
-            print >>errFile, 'launchInputDownload failed download %s' % fileAttr[0]
-            return False
-        os.rename(os.path.basename(fileAttr[0]), fileName)
-        os.chmod(fileName, fileAttr[1])
+    print >>logFile, 'Downloading auto uploaded file %s ...' % autoDownload
+    result = dirac.getFile(autoDownload)
+    if not (result['OK'] and result['Value']['Successful']):
+        print >>errFile, 'Auto uploaded files download failed: %s' % autoDownload
+        return False
+
+    tf = tarfile.open(os.path.basename(autoDownload))
+    tf.extractall()
+    tf.close()
+
     return True
 
 def launchPatch():
@@ -403,7 +407,6 @@ def uploadLog(loglfn, se):
     cp('rantrg.err', logdir)
 
     # tar path logdir
-    import tarfile
     tgzfile = path
     tf = tarfile.open(tgzfile,"w:gz")
     tf.add(logdir)
@@ -794,7 +797,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
     def __init__(self):
         self._allRound = []
-        self._autoDownload = {}
+        self._autoDownload = ''
 
     def master_prepare(self,app,appconfig):
         app.extra.master_input_buffers['gaudi_run.sh'] = gaudi_run_wrapper()
@@ -821,7 +824,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
-        opts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/%s/database";\n' % app.version
+        opts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/database";\n'
         app.extra.input_buffers['data.opts'] += opts
 
         # extra lines for reconstruction and remove empty files
@@ -893,15 +896,36 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             return ''
         return remote_path
 
+    def _pack_auto_upload(self,app):
+        j = app.getJobObject()
+        auto_upload_tgz_dir = j.getInputWorkspace().getPath()
+        auto_upload_tgz = os.path.join(auto_upload_tgz_dir, '_ganga_boss_auto_upload.tar.gz')
+
+        tf = tarfile.open(auto_upload_tgz, 'w:gz')
+        for auto_upload_file in app.auto_upload:
+            if not os.path.isfile(auto_upload_file):
+                raise ApplicationConfigurationError(None, 'No such file: %s' % auto_upload_file)
+            shutil.copy(auto_upload_file, auto_upload_tgz_dir)
+            auto_upload_basename = os.path.basename(auto_upload_file)
+            auto_upload_fullname = os.path.join(auto_upload_tgz_dir, auto_upload_basename)
+            tinfo = tf.gettarinfo(auto_upload_fullname, auto_upload_basename)
+            fileobj = open(auto_upload_fullname)
+            tf.addfile(tinfo, fileobj)
+#            tf.add(os.path.join(os.path.basename(auto_upload_file), auto_upload_tgz_dir))
+        tf.close()
+
+        return auto_upload_tgz
+
     def _boss_auto_upload(self,app):
+        auto_upload_tgz = self._pack_auto_upload(app)
+
         bdr = BDRegister(app.extra.metadata)
         remote_dir = bdr.getUploadDirName()
         se = Ganga.Utility.Config.getConfig('Boss')['AutoUploadSE']
-        for auto_upload_file in app.auto_upload:
-            remote_path = self._upload_file(auto_upload_file, remote_dir, se)
-            if not remote_path:
-                raise ApplicationConfigurationError(None, 'Cannot upload file %s to %s' % (auto_upload_file, se))
-            self._autoDownload[os.path.basename(auto_upload_file)] = [remote_path, os.stat(auto_upload_file).st_mode & 0777]
+        remote_path = self._upload_file(auto_upload_tgz, remote_dir, se)
+        if not remote_path:
+            raise ApplicationConfigurationError(None, 'Cannot upload file %s to %s' % (auto_upload_file, se))
+        self._autoDownload = remote_path
 
     def _boss_patch(self,app):
         if app.use_boss_patch:

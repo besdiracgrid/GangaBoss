@@ -53,6 +53,9 @@ RecoToDST-07/90000000/DST" ,
     def createDataset(self):
         return self.dfcOperation.createDataset(self.metadata)
 
+    def setRootDir(self, rootDir):
+        return self.dfcOperation.setRootDir(rootDir)
+
     def getFileDirName(self):
         return self.dfcOperation.getDirName(self.metadata)
 
@@ -106,6 +109,9 @@ class DfcOperation:
         if not DfcOperation._groupname:
             DfcOperation._groupname = getProxyInfo()['Value'].get('group', 'unknown')
         return DfcOperation._groupname
+
+    def setRootDir(self, rootDir):
+        DfcOperation._rootdir = rootDir
 
     def getRootDir(self):
         if not DfcOperation._rootdir:

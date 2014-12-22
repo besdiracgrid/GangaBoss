@@ -103,6 +103,8 @@ class Gaudi(Francesc):
     schema['auto_upload'] = SimpleItem(defvalue=[],doc=docstr)
     docstr = 'User workarea'
     schema['user_workarea'] = SimpleItem(defvalue='',doc=docstr)
+    docstr = 'Output root directory'
+    schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -178,8 +180,11 @@ class Gaudi(Francesc):
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
-
         self._auto_upload_workarea()
+
+        if self.output_rootdir:
+            bdr = BDRegister(self.extra.metadata)
+            bdr.setRootDir(self.output_rootdir)
 
         if anaoptsfiles:
             dataType = 'root'
