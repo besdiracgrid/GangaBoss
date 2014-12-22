@@ -341,7 +341,7 @@ def uploadData(lfn, se):
         result = dirac.addFile(lfn, path, se)
         if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
             break
-        time.sleep(random.randint(180, 600))
+        time.sleep(random.randint(60, 300))
         print >>errFile, '- Upload to %s on SE %s failed, try again' % (lfn, se)
     if result['OK']:
         if result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
