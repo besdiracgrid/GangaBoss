@@ -360,8 +360,12 @@ def removeData(lfn):
         return result
 
     for i in range(0, 16):
-        result = dirac.removeFile(lfn)
-        if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
+        try:
+            result = dirac.removeFile(lfn)
+            if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
+                break
+        except Exception, e:
+            result = S_ERROR('Exception: %s' % str(e))
             break
         time.sleep(random.randint(6, 30))
         print >>errFile, '- Remove %s failed, try again' % lfn
