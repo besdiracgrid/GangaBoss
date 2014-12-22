@@ -103,6 +103,8 @@ class Gaudi(Francesc):
     schema['auto_upload'] = SimpleItem(defvalue=[],doc=docstr)
     docstr = 'User workarea'
     schema['user_workarea'] = SimpleItem(defvalue='',doc=docstr)
+    docstr = 'Use custom packages'
+    schema['use_custom_package'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Output root directory'
     schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
 
@@ -180,6 +182,7 @@ class Gaudi(Francesc):
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
+        self._custom_package()
         self._auto_upload_workarea()
 
         if self.output_rootdir:
@@ -232,11 +235,27 @@ class Gaudi(Francesc):
             msg = 'The streamId format is not correct: %s. It should be like "stream001" but can not be "stream000"' % self.metadata['streamId']
             raise ApplicationConfigurationError(None,msg)
 
+    def _custom_package(self):
+        if self.user_workarea or not self.use_custom_package:
+            return
+
+        if 'CMTPATH' not in os.environ:
+            raise ApplicationConfigurationError(None, 'Can not guess the user workarea')
+        self.user_workarea = os.environ['CMTPATH'].split(':')[0]
+
     def _auto_upload_workarea(self):
-        if self.user_workarea:
-            platform = get_user_platform()
-            lib_dir = os.path.join(self.user_workarea, 'InstallArea', platform, 'lib')
-            print 'lib dir: %s' % lib_dir
+        if not self.user_workarea:
+            return
+
+        platform = get_user_platform()
+        lib_dir = os.path.join(self.user_workarea, 'InstallArea', platform, 'lib')
+        lib_list = os.listdir(lib_dir)
+        for lib_file in lib_list:
+            if lib_file.endswith('.so'):
+                lib_fullname = os.path.join(lib_dir, lib_file)
+                lib_realname = os.readlink(lib_fullname)
+                if os.path.isfile(lib_realname):
+                    self.auto_upload.append(lib_realname)
 
     def _prepare_metadata(self, parser, dataType):
         # deal with some metadata
