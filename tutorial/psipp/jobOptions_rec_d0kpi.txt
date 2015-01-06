@@ -40,10 +40,10 @@ BesRndmGenSvc.RndmSeed = 100;
 MessageSvc.OutputLevel = 6; 
 
 //ROOT input data file
-EventCnvSvc.digiRootInputFile = {"test_hadron.rtraw"};
+EventCnvSvc.digiRootInputFile = {"test_d0kpi.rtraw"};
 
 //ROOT output data file
-EventCnvSvc.digiRootOutputFile ="test_hadron.dst";
+EventCnvSvc.digiRootOutputFile ="test_d0kpi.dst";
 
 //Number of events to be processed (default is 10)
 ApplicationMgr.EvtMax = -1;
