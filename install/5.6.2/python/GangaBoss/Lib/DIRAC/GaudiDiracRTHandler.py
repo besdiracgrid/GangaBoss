@@ -291,6 +291,9 @@ def cp(src, dst):
         shutil.copy(src, dst)
 
 def launchInputDownload():
+    if not autoDownload:
+        return True
+
     print >>logFile, 'Downloading auto uploaded file %s ...' % autoDownload
     result = dirac.getFile(autoDownload)
     if not (result['OK'] and result['Value']['Successful']):
@@ -921,6 +924,9 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         return auto_upload_tgz
 
     def _boss_auto_upload(self,app):
+        if not app.auto_upload:
+            return
+
         auto_upload_tgz = self._pack_auto_upload(app)
 
         bdr = BDRegister(app.extra.metadata)
