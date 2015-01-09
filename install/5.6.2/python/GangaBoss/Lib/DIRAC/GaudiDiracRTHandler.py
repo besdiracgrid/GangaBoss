@@ -364,7 +364,7 @@ def removeData(lfn):
 
     for i in range(0, 16):
         try:
-            result = dirac.removeFile(lfn)
+            result = fcc.removeFile(lfn)
             if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
                 break
         except Exception, e:
