@@ -986,7 +986,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         os.system('chmod +x %s' % script)
         return script
 
-    def _create_boss_script(self,app):  
+    def _create_boss_script(self,app):
         '''Creates the script that will set the Boss environment on grid'''
         bdr = BDRegister(app.extra.metadata)
         app.extra.outputdata.location = bdr.getFileDirName()
