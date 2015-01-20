@@ -682,6 +682,7 @@ if __name__ == '__main__':
     # prepare
     cmd(['date'])
     cmd(['uname', '-a'])
+    cmd(['lsb_release', '-a'])
     cmd(['ls', '-ltrA'])
 
     # auto download
