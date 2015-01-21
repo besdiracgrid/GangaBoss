@@ -212,6 +212,7 @@ class BossBaseSplitter(ISplitter):
             'evtMaxPerJob': SimpleItem(defvalue=50,doc='Number of events per job'),
 	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
 	    'seed': SimpleItem(defvalue=None,typelist=['int','type(None)'],doc='Random number seed'),
+	    'outputEvtNum': SimpleItem(defvalue='',doc='Output event number file'),
             })
 
     def split(self,job):
@@ -225,6 +226,12 @@ class BossBaseSplitter(ISplitter):
             rndmSeed = self._getSeedStart()
         else:
             rndmSeed = self.seed
+
+        if self.outputEvtNum:
+            f = open(self.outputEvtNum, 'w')
+            for jobProperty in self._jobProperties:
+                print >>f, '%8d %8d %8d'%(jobProperty['runL'], jobProperty['runH'], jobProperty['eventNum'])
+            f.close()
 
         subjobs=[]
         for jobProperty in self._jobProperties:

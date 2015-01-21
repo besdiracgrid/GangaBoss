@@ -76,7 +76,7 @@ prefix=$2
 extrapy=$3
 
 besRoot=/cvmfs/boss.cern.ch
-cd ${besRoot}/slc5_amd64_gcc43/${bossVer}
+cd ${besRoot}/*/${bossVer}
 source setup.sh
 source scripts/${bossVer}/setup.sh
 source dist/${bossVer}/TestRelease/*/cmt/setup.sh
