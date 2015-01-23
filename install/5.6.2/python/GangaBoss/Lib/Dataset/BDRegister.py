@@ -246,7 +246,7 @@ class DfcOperation:
                     streamIds.append(streamId)
 
         maxId = max(streamIds) if streamIds else 0
-        newId = 'stream001'
+        newId = 1
         if maxId != 999:
             newId = maxId + 1
         else:
