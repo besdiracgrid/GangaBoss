@@ -222,6 +222,7 @@ class BossBaseSplitter(ISplitter):
         self._jobProperties = []
 
         self._prepare(job)
+
         if self.seed is None:
             rndmSeed = self._getSeedStart()
         else:
@@ -243,6 +244,7 @@ class BossBaseSplitter(ISplitter):
                 if job.application.anaoptsfile:
                     self._createAnaJob(subjob, jobProperty)
 
+            subjob.application.extra.output_name          = jobProperty['filename']
             subjob.application.extra.metadata['round']    = jobProperty['round']
             subjob.application.extra.metadata['runFrom']  = jobProperty['runFrom']
             subjob.application.extra.metadata['runTo']    = jobProperty['runTo']
@@ -259,7 +261,7 @@ class BossBaseSplitter(ISplitter):
         return ''
 
     def _createSimJob(self, job, jobProperty, rndmSeed):
-        simfilename = os.path.splitext(jobProperty['filename'])[0] + '.rtraw' 
+        simfilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['sim']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("data.opts")\n'
         sopts = self._addRunEventId(jobProperty)
@@ -279,7 +281,7 @@ class BossBaseSplitter(ISplitter):
         job.application.outputfile = simfilename
 
     def _createRecJob(self, job, jobProperty, rndmSeed):
-        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.dst' 
+        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['rec']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("recdata.opts")\n'
         sopts = 'EventCnvSvc.digiRootInputFile = {"%s.rtraw"};\n' % jobProperty['filename']
@@ -294,7 +296,7 @@ class BossBaseSplitter(ISplitter):
         job.application.outputfile = recfilename
 
     def _createAnaJob(self, job, jobProperty):
-        anafilename = os.path.splitext(jobProperty['filename'])[0] + '.root' 
+        anafilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['ana']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("anadata.opts")\n'
         sopts = 'EventCnvSvc.digiRootInputFile = {"%s.dst"};\n' % jobProperty['filename']

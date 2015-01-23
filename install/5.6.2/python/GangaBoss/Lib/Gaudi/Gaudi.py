@@ -107,6 +107,8 @@ class Gaudi(Francesc):
     schema['use_custom_package'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Output root directory'
     schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
+    docstr = 'Output data type'
+    schema['output_datatype'] = SimpleItem(defvalue=[],doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -171,14 +173,31 @@ class Gaudi(Francesc):
             else:
                 logger.info('Using the inputdata defined in the options file.')
                 self.extra.inputdata = inputdata
-        
-        if anaoptsfiles:
-           self.extra.outputsandbox,outputdata = anaparser.get_output(job)
-        elif recoptsfiles:
-           self.extra.outputsandbox,outputdata = recparser.get_output(job)
-        else:
-           self.extra.outputsandbox,outputdata = parser.get_output(job)
+
+        # only output the last step
+        if not self.output_datatype:
+            if anaoptsfiles:
+                self.output_datatype.append('ana')
+            elif recoptsfiles:
+                self.output_datatype.append('rec')
+            else:
+                self.output_datatype.append('sim')
+
+        # get output file name
+        outputsandbox,outputdata = anaparser.get_output(job)
+        self.extra.data_type['sim'] = outputdata.split('.')[-1]
+        self.extra.outputsandbox += outputsandbox
         self.extra.outputdata.files += outputdata
+        if recoptsfiles:
+            self.extra.outputsandbox,outputdata = recparser.get_output(job)
+            self.extra.data_type['rec'] = outputdata.split('.')[-1]
+            self.extra.outputsandbox += outputsandbox
+            self.extra.outputdata.files += outputdata
+            if anaoptsfiles:
+                self.extra.outputsandbox,outputdata = parser.get_output(job)
+                self.extra.data_type['ana'] = outputdata.split('.')[-1]
+                self.extra.outputsandbox += outputsandbox
+                self.extra.outputdata.files += outputdata
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
@@ -189,13 +208,7 @@ class Gaudi(Francesc):
             bdr = BDRegister(self.extra.metadata)
             bdr.setRootDir(self.output_rootdir)
 
-        if anaoptsfiles:
-            dataType = 'root'
-        elif recoptsfiles:
-            dataType = 'dst'
-        else:
-            dataType = 'rtraw'
-        self._prepare_metadata(parser, dataType)
+        self._prepare_metadata(parser)
 
         # write env into input dir
         input_dir = job.getInputWorkspace().getPath()
@@ -257,12 +270,12 @@ class Gaudi(Francesc):
                 if os.path.isfile(lib_realname):
                     self.auto_upload.append(lib_realname)
 
-    def _prepare_metadata(self, parser, dataType):
+    def _prepare_metadata(self, parser):
         # deal with some metadata
         self.extra.metadata = self.metadata.copy()
         self.extra.metadata['bossVer'] = self.version.replace('.', '')
 #        self.extra.metadata['round'] = parser.get_round_num()  # the round could vary with different runs
-        self.extra.metadata['dataType'] = dataType
+#        self.extra.metadata['dataType'] = dataType
 
         # the joboption and decay card
         self.extra.run_ranges = parser.get_run_range()

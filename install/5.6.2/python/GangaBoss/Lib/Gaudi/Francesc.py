@@ -270,6 +270,8 @@ class GaudiExtras:
         self.inputdata = BesDataset()
         self.outputsandbox = []
         self.outputdata = OutputData()
+        self.output_name = ''
+        self.data_type = {}
         self.metadata = {}
         self.input_buffers['data.py'] = ''
         self.input_buffers['recdata.py'] = ''
