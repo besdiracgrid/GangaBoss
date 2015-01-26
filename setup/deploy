@@ -1,0 +1,18 @@
+#!/bin/bash
+
+cd $(dirname $0)/..
+
+gangabossdir=`pwd`
+
+refdir="$gangabossdir/../1.0.7"
+
+cd $refdir
+reffulldir=`pwd`
+cd -
+
+echo $reffulldir
+
+ln -s "$reffulldir/install/5.6.2/bin" install/5.6.2
+ln -s "$reffulldir/install/5.6.2/python/Ganga" install/5.6.2/python
+ln -s "$reffulldir/install/5.6.2/python/gaudirun" install/5.6.2/python
+ln -s "$reffulldir/external" .
