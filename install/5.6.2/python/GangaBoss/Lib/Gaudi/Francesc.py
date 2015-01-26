@@ -271,6 +271,7 @@ class GaudiExtras:
         self.outputsandbox = []
         self.outputdata = OutputData()
         self.output_name = ''
+        self.output_files = []
         self.data_type = {}
         self.metadata = {}
         self.input_buffers['data.py'] = ''

@@ -108,7 +108,7 @@ class Gaudi(Francesc):
     docstr = 'Output root directory'
     schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
     docstr = 'Output data type'
-    schema['output_datatype'] = SimpleItem(defvalue=[],doc=docstr)
+    schema['output_step'] = SimpleItem(defvalue=[],doc=docstr)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -175,29 +175,46 @@ class Gaudi(Francesc):
                 self.extra.inputdata = inputdata
 
         # only output the last step
-        if not self.output_datatype:
+        if not self.output_step:
             if anaoptsfiles:
-                self.output_datatype.append('ana')
+                self.output_step.append('ana')
             elif recoptsfiles:
-                self.output_datatype.append('rec')
+                self.output_step.append('rec')
             else:
-                self.output_datatype.append('sim')
+                self.output_step.append('sim')
+
+        # data type for each step
+        simoutputsandbox,simoutputdata = parser.get_output(job)
+        for temp_output in simoutputdata:
+            temp_data_type = os.path.splitext(temp_output)[-1][1:]
+            if temp_data_type in ['rtraw']:
+                self.extra.data_type['sim'] = temp_data_type
+
+        if recoptsfiles:
+            recoutputsandbox,recoutputdata = recparser.get_output(job)
+            for temp_output in recoutputdata:
+                temp_data_type = os.path.splitext(temp_output)[-1][1:]
+                if temp_data_type in ['dst', 'rec']:
+                    self.extra.data_type['rec'] = temp_data_type
+
+            if anaoptsfiles:
+                anaoutputsandbox,anaoutputdata = anaparser.get_output(job)
+                for temp_output in anaoutputdata:
+                    temp_data_type = os.path.splitext(temp_output)[-1][1:]
+                    if temp_data_type in ['root']:
+                        self.extra.data_type['ana'] = temp_data_type
+
+        logger.debug('The output step : %s' % self.output_step)
+        logger.debug('The data_type : %s' % self.extra.data_type)
 
         # get output file name
-        outputsandbox,outputdata = anaparser.get_output(job)
-        self.extra.data_type['sim'] = outputdata.split('.')[-1]
-        self.extra.outputsandbox += outputsandbox
+        if anaoptsfiles:
+           self.extra.outputsandbox,outputdata = anaoutputsandbox,anaoutputdata
+        elif recoptsfiles:
+           self.extra.outputsandbox,outputdata = recoutputsandbox,recoutputdata
+        else:
+           self.extra.outputsandbox,outputdata = simoutputsandbox,simoutputdata
         self.extra.outputdata.files += outputdata
-        if recoptsfiles:
-            self.extra.outputsandbox,outputdata = recparser.get_output(job)
-            self.extra.data_type['rec'] = outputdata.split('.')[-1]
-            self.extra.outputsandbox += outputsandbox
-            self.extra.outputdata.files += outputdata
-            if anaoptsfiles:
-                self.extra.outputsandbox,outputdata = parser.get_output(job)
-                self.extra.data_type['ana'] = outputdata.split('.')[-1]
-                self.extra.outputsandbox += outputsandbox
-                self.extra.outputdata.files += outputdata
         self.extra.outputdata.files = unique(self.extra.outputdata.files)
 
         self._validate_input()
@@ -275,7 +292,12 @@ class Gaudi(Francesc):
         self.extra.metadata = self.metadata.copy()
         self.extra.metadata['bossVer'] = self.version.replace('.', '')
 #        self.extra.metadata['round'] = parser.get_round_num()  # the round could vary with different runs
-#        self.extra.metadata['dataType'] = dataType
+
+        dataType = ''
+        for step in self.output_step:
+            if step in self.extra.data_type:
+                dataType += self.extra.data_type[step]
+        self.extra.metadata['dataType'] = dataType
 
         # the joboption and decay card
         self.extra.run_ranges = parser.get_run_range()

@@ -41,6 +41,9 @@ def copy_app(app):
     cp_app.extra.input_files = app.extra.input_files[:]
     cp_app.extra.outputsandbox = app.extra.outputsandbox[:]
     cp_app.extra.outputdata = app.extra.outputdata
+    cp_app.extra.output_name = app.extra.output_name
+    cp_app.extra.output_files = app.extra.output_files[:]
+    cp_app.extra.data_type = app.extra.data_type.copy()
     cp_app.extra.metadata = app.extra.metadata.copy()
     cp_app.extra.run_ranges = app.extra.run_ranges[:]
     return cp_app 
@@ -249,6 +252,10 @@ class BossBaseSplitter(ISplitter):
             subjob.application.extra.metadata['runFrom']  = jobProperty['runFrom']
             subjob.application.extra.metadata['runTo']    = jobProperty['runTo']
 
+            for step in subjob.application.output_step:
+                if step in subjob.application.extra.data_type:
+                    subjob.application.extra.output_files.append(subjob.application.extra.output_name + '.' + subjob.application.extra.data_type[step])
+
             subjobs.append(subjob)
             rndmSeed += 1
 
@@ -261,11 +268,11 @@ class BossBaseSplitter(ISplitter):
         return ''
 
     def _createSimJob(self, job, jobProperty, rndmSeed):
-        simfilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['sim']
+        simfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['sim']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("data.opts")\n'
         sopts = self._addRunEventId(jobProperty)
-        sopts += 'RootCnvSvc.digiRootOutputFile = "%s.rtraw";\n' % jobProperty['filename']
+        sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % simfilename
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
         logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
@@ -281,10 +288,11 @@ class BossBaseSplitter(ISplitter):
         job.application.outputfile = simfilename
 
     def _createRecJob(self, job, jobProperty, rndmSeed):
-        recfilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['rec']
+        simfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['sim']
+        recfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['rec']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("recdata.opts")\n'
-        sopts = 'EventCnvSvc.digiRootInputFile = {"%s.rtraw"};\n' % jobProperty['filename']
+        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % simfilename
         sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfilename
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
@@ -296,10 +304,11 @@ class BossBaseSplitter(ISplitter):
         job.application.outputfile = recfilename
 
     def _createAnaJob(self, job, jobProperty):
-        anafilename = os.path.splitext(jobProperty['filename'])[0] + '.' + job.application.extra.data_type['ana']
+        recfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['rec']
+        anafilename = jobProperty['filename'] + '.' + job.application.extra.data_type['ana']
         opts = 'from Gaudi.Configuration import * \n'
         opts += 'importOptions("anadata.opts")\n'
-        sopts = 'EventCnvSvc.digiRootInputFile = {"%s.dst"};\n' % jobProperty['filename']
+        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % recfilename
         sopts += 'NTupleSvc.Output = { "FILE1 DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % anafilename
         sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         logger.debug("zhangxm log: anadata.opts:%s", sopts)

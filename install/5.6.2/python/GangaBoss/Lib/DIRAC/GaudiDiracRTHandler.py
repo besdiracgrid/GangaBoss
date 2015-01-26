@@ -106,7 +106,7 @@ if [ ! -f $outputfile ]; then
 fi
 """
 
-def boss_script_wrapper(bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
+def boss_script_wrapper(bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
     script_head = """#!/usr/bin/env python
 
 import os, sys, shutil, re, time, datetime, random, socket, tarfile
@@ -145,7 +145,7 @@ hostname = socket.gethostname()
 logJobInfo = False
 
 bossVer = '%s'
-lfn = '%s'
+lfns = %s
 loglfn = '%s'
 se = '%s'
 eventNumber = %s
@@ -154,7 +154,7 @@ runH = %s
 useLocalRantrg = %s
 autoDownload = '%s'
 
-""" % (bossVer, lfn, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
+""" % (bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
 
     script_body = """
 def getRantrgInfo():
@@ -636,35 +636,36 @@ def bossjob():
         setJobInfo('End Analysis')
 
 
-    # upload file and reg
-    setJobStatus('Uploading Data')
-    setJobInfo('Start Uploading Data')
-    result = uploadData(lfn, se)
-    if not result['OK']:
-        print >>errFile, 'Upload Data Error:\\n%s' % result
-        setJobStatus('Upload Data Error')
-        setJobInfo('End Uploading Data with Error')
-        setJobInfo('End Job with Error: %s' % 72)
-        return 72
-    setJobInfo('End Uploading Data')
+    # upload files and reg
+    for lfn in lfns:
+        setJobStatus('Uploading Data')
+        setJobInfo('Start Uploading Data')
+        result = uploadData(lfn, se)
+        if not result['OK']:
+            print >>errFile, 'Upload Data Error:\\n%s' % result
+            setJobStatus('Upload Data Error')
+            setJobInfo('End Uploading Data with Error')
+            setJobInfo('End Job with Error: %s' % 72)
+            return 72
+        setJobInfo('End Uploading Data')
 
-    setJobStatus('Setting Metadata')
-    setJobInfo('Start Setting Metadata')
-    metadata = {'jobId':       jobID,
-                'eventNumber': eventNumber,
-                'runL':        runL,
-                'runH':        runH,
-                'count':       1,
-               }
-    result = registerMetadata(lfn, metadata)
-    if not result['OK']:
-        print >>errFile, 'Set Metadata Error:\\n%s' % result
-        setJobStatus('Setting Metadata Error')
-        setJobInfo('End Setting Metadata with Error')
-        removeData(lfn)
-        setJobInfo('End Job with Error: %s' % 73)
-        return 73
-    setJobInfo('End Set Metadata')
+        setJobStatus('Setting Metadata')
+        setJobInfo('Start Setting Metadata')
+        metadata = {'jobId':       jobID,
+                    'eventNumber': eventNumber,
+                    'runL':        runL,
+                    'runH':        runH,
+                    'count':       1,
+                   }
+        result = registerMetadata(lfn, metadata)
+        if not result['OK']:
+            print >>errFile, 'Set Metadata Error:\\n%s' % result
+            setJobStatus('Setting Metadata Error')
+            setJobInfo('End Setting Metadata with Error')
+            removeData(lfn)
+            setJobInfo('End Job with Error: %s' % 73)
+            return 73
+        setJobInfo('End Set Metadata')
 
     setJobStatus('Boss Job Finished Successfully')
     setJobInfo('End Job')
@@ -991,9 +992,11 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         '''Creates the script that will set the Boss environment on grid'''
         bdr = BDRegister(app.extra.metadata)
         app.extra.outputdata.location = bdr.getFileDirName()
-        lfn = os.path.join(app.extra.outputdata.location, app.outputfile)
-        loglfn = os.path.join(bdr.getLogDirName(), app.outputfile + '.log.tar.gz')
-        wrapper = boss_script_wrapper(app.version, lfn, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
+        lfns = []
+        for output_file in app.extra.output_files:
+            lfns.append(os.path.join(app.extra.outputdata.location, output_file))
+        loglfn = os.path.join(bdr.getLogDirName(), app.extra.output_name + '.log.tar.gz')
+        wrapper = boss_script_wrapper(app.version, lfns, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
                                       app.eventNumber, app.runL, app.runH, app.local_rantrg, self._autoDownload)
         j = app.getJobObject()
         script = os.path.join(j.getInputWorkspace().getPath(), "boss_dirac.py")
