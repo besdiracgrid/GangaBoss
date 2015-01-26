@@ -4,15 +4,20 @@ cd $(dirname $0)/..
 
 gangabossdir=`pwd`
 
+echo "Current Ganga directory is $gangabossdir"
+
 refdir="$gangabossdir/../1.0.7"
 
 cd $refdir
 reffulldir=`pwd`
-cd -
 
-echo $reffulldir
+echo "Reference Ganga directory is $reffulldir"
+
+
+cd $gangabossdir
 
 ln -s "$reffulldir/install/5.6.2/bin" install/5.6.2
-ln -s "$reffulldir/install/5.6.2/python/Ganga" install/5.6.2/python
+#ln -s "$reffulldir/install/5.6.2/python/Ganga" install/5.6.2/python
+cp -r "$reffulldir/install/5.6.2/python/Ganga" install/5.6.2/python
 ln -s "$reffulldir/install/5.6.2/python/gaudirun" install/5.6.2/python
 ln -s "$reffulldir/external" .
