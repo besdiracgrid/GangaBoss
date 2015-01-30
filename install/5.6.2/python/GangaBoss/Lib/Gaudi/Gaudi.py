@@ -187,6 +187,7 @@ class Gaudi(Francesc):
         simoutputsandbox,simoutputdata = parser.get_output(job)
         for temp_output in simoutputdata:
             temp_data_type = os.path.splitext(temp_output)[-1][1:]
+            temp_data_type = temp_data_type.strip()
             if temp_data_type in ['rtraw']:
                 self.extra.data_type['sim'] = temp_data_type
 
@@ -194,6 +195,7 @@ class Gaudi(Francesc):
             recoutputsandbox,recoutputdata = recparser.get_output(job)
             for temp_output in recoutputdata:
                 temp_data_type = os.path.splitext(temp_output)[-1][1:]
+                temp_data_type = temp_data_type.strip()
                 if temp_data_type in ['dst', 'rec']:
                     self.extra.data_type['rec'] = temp_data_type
 
@@ -201,6 +203,7 @@ class Gaudi(Francesc):
                 anaoutputsandbox,anaoutputdata = anaparser.get_output(job)
                 for temp_output in anaoutputdata:
                     temp_data_type = os.path.splitext(temp_output)[-1][1:]
+                    temp_data_type = temp_data_type.strip()
                     if temp_data_type in ['root']:
                         self.extra.data_type['ana'] = temp_data_type
 
