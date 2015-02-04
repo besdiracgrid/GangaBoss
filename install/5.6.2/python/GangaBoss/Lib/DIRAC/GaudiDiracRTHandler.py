@@ -277,7 +277,11 @@ def cmd(args):
     logFile.flush()
     errFile.flush()
 
-    result = call(args, stdout=logFile, stderr=errFile)
+    result = -1
+    try:
+        result = call(args, stdout=logFile, stderr=errFile)
+    except Exception as e:
+        print >>errFile, 'Run command failed: %s' % e
 
     endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, args, '='*80)
     print >>logFile, endcmd
