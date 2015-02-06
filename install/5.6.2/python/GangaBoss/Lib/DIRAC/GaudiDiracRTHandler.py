@@ -256,17 +256,49 @@ def validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
 
     return rantrgPath
 
+def validateReplaceLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
+    rantrgPath = ''
+
+    for rantrgRoundPath in rantrgRoundPaths:
+        if os.path.exists(os.path.join(rantrgRoundPath, filelist[0])):
+            rantrgPath = rantrgRoundPath
+            break
+        if dateDir and os.path.exists(os.path.join(rantrgRoundPath, dateDir, filelist[0])):
+            rantrgPath = rantrgRoundPath
+            break
+
+    if not rantrgPath:
+        print >>errFile, 'Local random trigger file not in regular path: Try to find in %s' % rantrgRoundPaths
+
+        for rantrgRoundPath in rantrgRoundPaths:
+            for root,subdirs,files in os.walk(rantrgRoundPath):
+                if filelist[0] in files:
+                    rantrgPath = rantrgRoundPath
+                    break
+            if rantrgPath:
+                break
+
+    if not rantrgPath:
+        print >>errFile, 'Local random trigger file not found: Random trigger file not found anywhere'
+
+    return rantrgPath
+
 def getLocalRantrgPath():
     roundNum, dateDir, filelist = getRantrgInfo()
+    print 'roundNum: %s, dateDir: %s' % (roundNum, dateDir)
     if not roundNum:
         print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
         return ''
 
     rantrgMethod, rantrgRoundPaths = getRantrgRoundInfo(roundNum)
+    print 'rantrgMethod: %s, rantrgRoundPaths: %s' % (rantrgMethod, rantrgRoundPaths)
 
     rantrgPath = ''
     if rantrgMethod == 'New':
         rantrgPath = validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
+    elif rantrgMethod == 'Replace':
+        rantrgPath = validateReplaceLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
+        rantrgPath = rantrgPath[:rantrgPath.rfind('/')+1]
 
     return rantrgMethod, rantrgPath
 
@@ -516,7 +548,7 @@ def bossjob():
                 print >>logFile, 'Use local random trigger with default path'
                 generateLocalRantrgOpt()
 
-        if not rantrgMethod:
+        if not (rantrgMethod and localRantrgPath):
             if runH > runL:
                 print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
                 setJobStatus('Can not do reconstruction on this site with split by event')
