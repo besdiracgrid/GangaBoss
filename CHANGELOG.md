@@ -1,6 +1,17 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.0.7.2 (2015-02-11)
+---------------------
+
+### New Feature
+- Support SL6 and BOSS 6.6.5
+- Use seperated directory for Gaudi and copy gaudirun.py script there
+- Change the directory structure of Ganga
+
+### Bug
+- Fix bug of "Replace" method of local random trigger
+
 v1.0.7.1 (2015-01-26)
 ---------------------
 
@@ -10,7 +21,7 @@ v1.0.7.1 (2015-01-26)
 - User can specify the output file to get event number of each job
 
 v1.0.7 (2015-01-14)
----------------------
+-------------------
 
 ### New Feature
 - Support using local random trigger file for reconstruction on specified site
@@ -23,6 +34,3 @@ v1.0.7 (2015-01-14)
 - Add dataset fullpath to fit new DIRAC version
 - User can set random seed in the splitter
 - Add a FakeSplitterByRun for debug. Each run has same event number
-
-### Bug
-
