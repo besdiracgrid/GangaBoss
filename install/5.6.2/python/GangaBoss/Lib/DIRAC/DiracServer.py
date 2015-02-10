@@ -88,13 +88,11 @@ class DiracServer:
         '''Run the server.'''
         server_script = '%s/server/dirac-server.py' % self.path
         dirac_cmds = '%s/server/DiracCommands.py' % self.path
-        cmd = 'python %s %d \'%s\' %s %d' % (server_script,port,
-                                             self.end_data_str,
-                                             dirac_cmds,self.server_id)
+        cmd = ['python', server_script, '%d'%port, self.end_data_str, dirac_cmds, '%d'%self.server_id]
         stdout = open('/dev/null','w')
         if configDirac['ShowDIRACstdout']: stdout = None
            
-        self.server = Popen([cmd],shell=True,env=DiracServer.dirac_env,
+        self.server = Popen(cmd,
                             stdout=stdout,stderr=STDOUT)
         self.show_stdout = configDirac['ShowDIRACstdout']
         time.sleep(1)
