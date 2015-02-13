@@ -59,13 +59,13 @@ def gaudi_run_wrapper():
 bossVer=$1
 
 besRoot=/cvmfs/boss.cern.ch
-cd ${besRoot}/slc5_amd64_gcc43/${bossVer}
+cd ${besRoot}/*/${bossVer}
 source setup.sh
 source scripts/${bossVer}/setup.sh
 source dist/${bossVer}/TestRelease/*/cmt/setup.sh
 cd $OLDPWD
 
-gaudirun.py -n -o options_rantrg.opts options.pkl data.py
+gaudirun.py -n -o options_rantrg.opts options.opts data.opts
 """
 
 def boss_run_wrapper():
@@ -73,7 +73,7 @@ def boss_run_wrapper():
 
 bossVer=$1
 prefix=$2
-extrapy=$3
+extraopts=$3
 
 besRoot=/cvmfs/boss.cern.ch
 cd ${besRoot}/*/${bossVer}
@@ -84,24 +84,16 @@ cd $OLDPWD
 
 export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so_3:$LD_LIBRARY_PATH
 
-gaudirun.py -n -v -o ${prefix}options.opts ${prefix}options.pkl ${prefix}data.py ${extrapy}
-boss.exe ${prefix}options.opts 1>>${prefix}bosslog 2>>${prefix}bosserr
+gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
+boss.exe ${prefix}final.opts 1>>${prefix}bosslog 2>>${prefix}bosserr
 result=$?
 if [ $result != 0 ]; then 
-   echo "ERROR: boss.exe on ${prefix}options failed" >&2
+   echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
    exit $result
 fi
 
-if [[ $prefix == 'rec' ]]; then
-   cnvsvc=EventCnvSvc
-else
-   cnvsvc=RootCnvSvc
-fi
-
-gaudirun.py -n -o ${prefix}options.py ${prefix}options.pkl ${prefix}data.py
-outputfile=`python -c "print eval(open('${prefix}options.py').read())['${cnvsvc}']['digiRootOutputFile']"`
-if [ ! -f $outputfile ]; then
-   echo "ERROR: $outputfile not generated" >&2
+if ! ( grep -q 'Application Manager Finalized successfully' ${prefix}bosslog && grep -q 'INFO Application Manager Terminated successfully' ${prefix}bosslog ); then
+   echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
    exit 2
 fi
 """
@@ -129,8 +121,8 @@ fcc = FileCatalogClient(fccType)
 
 from DIRAC.Core.DISET.RPCClient                      import RPCClient
 
-doReconstruction = os.path.exists('recoptions.pkl')
-doAnalysis = os.path.exists('anaoptions.pkl')
+doReconstruction = os.path.exists('recoptions.opts')
+doAnalysis = os.path.exists('anaoptions.opts')
 delDisableWatchdog = False
 
 logFile = open('script.log', 'w')
@@ -879,20 +871,17 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             app.extra.input_buffers['recdata.opts'] += extraopts
         else:
             app.extra.input_buffers.pop('recdata.opts', None)
-            app.extra.input_buffers.pop('recdata.py', None)
 
         # extra lines for analysis and remove empty files
         if app.anaoptsfile:
             app.extra.input_buffers['anadata.opts'] += opts
-            app.extra.input_buffers['anadata.opts'] += opts
         else:
             app.extra.input_buffers.pop('anadata.opts', None)
-            app.extra.input_buffers.pop('anadata.py', None)
 
         if app.extra.inputdata and app.extra.inputdata.hasLFNs():        
             cat_opts = '\nFileCatalog().Catalogs = ' \
                        '["xmlcatalog_file:pool_xml_catalog.xml"]\n'
-            app.extra.input_buffers['data.py'] += cat_opts
+#            app.extra.input_buffers['data.py'] += cat_opts
 
         #script = self._create_gaudi_script(app) # comment out by zhangxm
         script = self._create_boss_script(app)

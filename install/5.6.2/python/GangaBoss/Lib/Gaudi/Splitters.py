@@ -269,15 +269,12 @@ class BossBaseSplitter(ISplitter):
 
     def _createSimJob(self, job, jobProperty, rndmSeed):
         simfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['sim']
-        opts = 'from Gaudi.Configuration import * \n'
-        opts += 'importOptions("data.opts")\n'
-        sopts = self._addRunEventId(jobProperty)
-        sopts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % simfilename
-        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
-        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        logger.debug("zhangxm log: data.opts_sopts:%s", sopts)
-        job.application.extra.input_buffers['data.opts'] += sopts
-        job.application.extra.input_buffers['data.py'] += opts
+        opts = self._addRunEventId(jobProperty)
+        opts += 'RootCnvSvc.digiRootOutputFile = "%s";\n' % simfilename
+        opts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        opts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
+        logger.debug("zhangxm log: data.opts_sopts:%s", opts)
+        job.application.extra.input_buffers['data.opts'] += opts
 
         job.application.runL = jobProperty['runL']
         job.application.runH = jobProperty['runH']
@@ -290,15 +287,12 @@ class BossBaseSplitter(ISplitter):
     def _createRecJob(self, job, jobProperty, rndmSeed):
         simfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['sim']
         recfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['rec']
-        opts = 'from Gaudi.Configuration import * \n'
-        opts += 'importOptions("recdata.opts")\n'
-        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % simfilename
-        sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfilename
-        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
-        sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
-        logger.debug("zhangxm log: recdata.opts:%s", sopts)
-        job.application.extra.input_buffers['recdata.opts'] += sopts
-        job.application.extra.input_buffers['recdata.py'] += opts
+        opts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % simfilename
+        opts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfilename
+        opts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        opts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
+        logger.debug("zhangxm log: recdata.opts:%s", opts)
+        job.application.extra.input_buffers['recdata.opts'] += opts
 
         job.application.extra.outputdata.files = recfilename
         job.application.outputfile = recfilename
@@ -306,14 +300,11 @@ class BossBaseSplitter(ISplitter):
     def _createAnaJob(self, job, jobProperty):
         recfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['rec']
         anafilename = jobProperty['filename'] + '.' + job.application.extra.data_type['ana']
-        opts = 'from Gaudi.Configuration import * \n'
-        opts += 'importOptions("anadata.opts")\n'
-        sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % recfilename
-        sopts += 'NTupleSvc.Output = { "FILE1 DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % anafilename
-        sopts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
-        logger.debug("zhangxm log: anadata.opts:%s", sopts)
-        job.application.extra.input_buffers['anadata.opts'] += sopts
-        job.application.extra.input_buffers['anadata.py'] += opts
+        opts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % recfilename
+        opts += 'NTupleSvc.Output = { "FILE1 DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % anafilename
+        opts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
+        logger.debug("zhangxm log: anadata.opts:%s", opts)
+        job.application.extra.input_buffers['anadata.opts'] += opts
 
         job.application.extra.outputdata.files = anafilename
         job.application.outputfile = anafilename
@@ -657,9 +648,9 @@ class UserSplitterByRun(BossBaseSplitter):
         connection.close()
 
     def _addRunEventId(self, jobProperty):
-        sopts = 'RealizationSvc.InitEvtID = %d;\n' % jobProperty['eventId']
-        sopts += 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
-        return sopts
+        opts = 'RealizationSvc.InitEvtID = %d;\n' % jobProperty['eventId']
+        opts += 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
+        return opts
 
 
     def _getEventId(self, cursor, runId, sftVer, currentNum):
@@ -822,8 +813,8 @@ class FakeSplitterByRun(BossBaseSplitter):
             self._jobProperties.append(jobProperty)
 
     def _addRunEventId(self, jobProperty):
-        sopts = 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
-        return sopts
+        opts = 'RealizationSvc.RunIdList = {%d};\n' % jobProperty['runL']
+        return opts
 
     def _generateSQL(self, guest_cursor, bossRelease, runFrom, runTo):
 

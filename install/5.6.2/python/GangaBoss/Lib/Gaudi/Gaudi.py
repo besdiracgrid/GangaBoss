@@ -144,23 +144,26 @@ class Gaudi(Francesc):
             #logger.error(msg)
             raise ApplicationConfigurationError(None,msg)
 
-        self.extra.master_input_buffers['options.pkl'] = parser.opts_pkl_str
-        script = "%s/options.pkl" % job.getInputWorkspace().getPath()
-        file_pkl=open(script,'w')
-        file_pkl.write(parser.opts_pkl_str)
-        file_pkl.close()
+#        self.extra.master_input_buffers['options.pkl'] = parser.opts_pkl_str
+        self.extra.master_input_buffers['options.opts'] = parser.opts_str
+#        script = "%s/options.pkl" % job.getInputWorkspace().getPath()
+#        file_pkl=open(script,'w')
+#        file_pkl.write(parser.opts_pkl_str)
+#        file_pkl.close()
         if recoptsfiles:
-            self.extra.master_input_buffers['recoptions.pkl'] = recparser.opts_pkl_str
-            recscript = "%s/recoptions.pkl" % job.getInputWorkspace().getPath()
-            file_recpkl=open(recscript,'w')
-            file_recpkl.write(recparser.opts_pkl_str)
-            file_recpkl.close()
+#            self.extra.master_input_buffers['recoptions.pkl'] = recparser.opts_pkl_str
+            self.extra.master_input_buffers['recoptions.opts'] = recparser.opts_str
+#            recscript = "%s/recoptions.pkl" % job.getInputWorkspace().getPath()
+#            file_recpkl=open(recscript,'w')
+#            file_recpkl.write(recparser.opts_pkl_str)
+#            file_recpkl.close()
             if anaoptsfiles:
-                self.extra.master_input_buffers['anaoptions.pkl'] = anaparser.opts_pkl_str
-                anascript = "%s/anaoptions.pkl" % job.getInputWorkspace().getPath()
-                file_anapkl=open(anascript,'w')
-                file_anapkl.write(anaparser.opts_pkl_str)
-                file_anapkl.close()
+#                self.extra.master_input_buffers['anaoptions.pkl'] = anaparser.opts_pkl_str
+                self.extra.master_input_buffers['anaoptions.opts'] = anaparser.opts_str
+#                anascript = "%s/anaoptions.pkl" % job.getInputWorkspace().getPath()
+#                file_anapkl=open(anascript,'w')
+#                file_anapkl.write(anaparser.opts_pkl_str)
+#                file_anapkl.close()
         inputdata = parser.get_input_data()
   
         # If user specified a dataset, ignore optsfile data but warn the user.

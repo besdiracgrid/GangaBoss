@@ -22,6 +22,25 @@ class PythonOptionsParser:
         self.extraopts = extraopts
         self.shell = shell
         self.opts_dict,self.opts_pkl_str = self._get_opts_dict_and_pkl_string()
+        self.opts_str = self._get_opts_string()
+
+    def _get_opts_string( self):
+        opts_string = ''
+
+        tmp_opts = tempfile.NamedTemporaryFile(suffix = '.opts')
+
+        opts_name = ' '.join(self.optsfiles)
+        gaudirun = 'gaudirun.py -n -o %s %s' % (tmp_opts.name, opts_name)
+        rc, stdout, m = self.shell.cmd1(gaudirun)
+        if rc == 0:
+            try:
+                opts_string = tmp_opts.read()
+            except IOError, e:
+                logger.error('Cannot read() the temporary opts file: %s',
+                             tmp_opts.name)
+
+        tmp_opts.close()
+        return opts_string
 
     def _get_opts_dict_and_pkl_string( self):
         '''Parse the options using gaudirun.py and create a dictionary of the
