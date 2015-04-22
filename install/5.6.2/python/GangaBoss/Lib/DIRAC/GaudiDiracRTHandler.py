@@ -966,9 +966,16 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         bdr = BDRegister(app.extra.metadata)
         remote_dir = bdr.getUploadDirName()
         se = Ganga.Utility.Config.getConfig('Boss')['AutoUploadSE']
-        remote_path = self._upload_file(auto_upload_tgz, remote_dir, se)
+#  edit by yant. since sometimes upload will fail. so try 10 times
+#        remote_path = self._upload_file(auto_upload_tgz, remote_dir, se)
+        for repeatTime in range(10):
+            remote_path = self._upload_file(auto_upload_tgz, remote_dir, se)
+            if remote_path:
+                break
+            else:
+                continue
         if not remote_path:
-            raise ApplicationConfigurationError(None, 'Cannot upload file %s to %s' % (auto_upload_file, se))
+            raise ApplicationConfigurationError(None, 'Cannot upload file %s to %s' % (auto_upload_tgz, se))
         self._autoDownload = remote_path
 
     def _boss_patch(self,app):
