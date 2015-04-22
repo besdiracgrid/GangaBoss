@@ -12,6 +12,7 @@ from GaudiRunTimeHandler import *
 from PythonOptionsParser import PythonOptionsParser
 from Francesc import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
+from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Ganga.Utility.util import unique
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 from Ganga.Utility.Shell import Shell
@@ -88,7 +89,8 @@ class Gaudi(Francesc):
                                      typelist=['str','type(None)'],doc=docstr) 
     docstr = 'User metadata'
     schema['metadata'] = SimpleItem(defvalue={},doc=docstr) 
-    _schema = Schema(Version(2, 1), schema)
+    docstr = 'Task name'
+    schema['taskname'] = SimpleItem(defvalue='',doc=docstr) 
     docstr = 'Long idle job'
     schema['long_idle'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Create dataset'
@@ -109,6 +111,8 @@ class Gaudi(Francesc):
     schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
     docstr = 'Output data type'
     schema['output_step'] = SimpleItem(defvalue=[],doc=docstr)
+
+    _schema = Schema(Version(2, 1), schema)
 
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
@@ -144,26 +148,11 @@ class Gaudi(Francesc):
             #logger.error(msg)
             raise ApplicationConfigurationError(None,msg)
 
-#        self.extra.master_input_buffers['options.pkl'] = parser.opts_pkl_str
         self.extra.master_input_buffers['options.opts'] = parser.opts_str
-#        script = "%s/options.pkl" % job.getInputWorkspace().getPath()
-#        file_pkl=open(script,'w')
-#        file_pkl.write(parser.opts_pkl_str)
-#        file_pkl.close()
         if recoptsfiles:
-#            self.extra.master_input_buffers['recoptions.pkl'] = recparser.opts_pkl_str
             self.extra.master_input_buffers['recoptions.opts'] = recparser.opts_str
-#            recscript = "%s/recoptions.pkl" % job.getInputWorkspace().getPath()
-#            file_recpkl=open(recscript,'w')
-#            file_recpkl.write(recparser.opts_pkl_str)
-#            file_recpkl.close()
             if anaoptsfiles:
-#                self.extra.master_input_buffers['anaoptions.pkl'] = anaparser.opts_pkl_str
                 self.extra.master_input_buffers['anaoptions.opts'] = anaparser.opts_str
-#                anascript = "%s/anaoptions.pkl" % job.getInputWorkspace().getPath()
-#                file_anapkl=open(anascript,'w')
-#                file_anapkl.write(anaparser.opts_pkl_str)
-#                file_anapkl.close()
         inputdata = parser.get_input_data()
   
         # If user specified a dataset, ignore optsfile data but warn the user.
@@ -232,6 +221,8 @@ class Gaudi(Francesc):
             bdr.setRootDir(self.output_rootdir)
 
         self._prepare_metadata(parser)
+
+        self._task_info()
 
         # write env into input dir
         input_dir = job.getInputWorkspace().getPath()
@@ -321,13 +312,46 @@ class Gaudi(Francesc):
             f = open(self.optsfile[0].name)
             self.extra.metadata['jobOptions'] = f.read()
             f.close()
-            decaycard = parser.get_decay_card()
-            if decaycard:
-                decaycard_path = decaycard if decaycard.startswith('/') else os.path.join(os.path.dirname(self.optsfile[0].name), decaycard)
+            self._decaycard = parser.get_decay_card()
+            if self._decaycard:
+                decaycard_path = self._decaycard if self._decaycard.startswith('/') else os.path.join(os.path.dirname(self.optsfile[0].name), self._decaycard)
                 f = open(decaycard_path)
                 self.extra.metadata['decayCard'] = f.read()
                 f.close()
-                self.extra.master_input_buffers[decaycard] = self.extra.metadata['decayCard']
+                self.extra.master_input_buffers[self._decaycard] = self.extra.metadata['decayCard']
+
+    def _task_info(self):
+        gDiracTask.reset()
+        job = self.getJobObject()
+
+        jobType = []
+        if self.optsfile:
+            jobType.append('sim')
+        if self.recoptsfile:
+            jobType.append('rec')
+        if self.anaoptsfile:
+            jobType.append('ana')
+
+        taskInfo = {}
+        taskInfo['BossVersion'] = self.version
+        taskInfo['Platform'] = self.platform
+        taskInfo['JobType'] = ' + '.join(jobType)
+        taskInfo['EventType'] = self.extra.metadata.get('eventType', 'unknown')
+        taskInfo['Resonance'] = self.extra.metadata.get('resonance', 'unknown')
+        taskInfo['CustomPackage'] = self.use_custom_package
+        taskInfo['GangaID'] = job.id
+        taskInfo['LocalRandomTrigger'] = self.local_rantrg
+        taskInfo['OutputStep'] = self.output_step
+        taskInfo['StreamID'] = self.extra.metadata.get('streamId', 'streamxxx')
+        taskInfo['JobOptionSim'] = [fileitem.name for fileitem in self.optsfile]
+        taskInfo['JobOptionRec'] = [fileitem.name for fileitem in self.recoptsfile]
+        taskInfo['JobOptionAna'] = [fileitem.name for fileitem in self.anaoptsfile]
+        taskInfo['DecayCard'] = self._decaycard
+
+        taskInfo['Dataset'] = []
+        taskInfo['OutputDirectory'] = []
+
+        gDiracTask.updateTaskInfo(taskInfo)
 
     def _check_inputs(self):
         """Checks the validity of some of user's entries for Gaudi schema"""

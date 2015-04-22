@@ -8,6 +8,7 @@ from DiracUtils import *
 from DiracScript import *
 from GangaBoss.Lib.Gaudi.RTHUtils import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
+from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Ganga.GPIDev.Lib.File import FileBuffer, File
 from Ganga.Utility.Shell import Shell
 
@@ -843,6 +844,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._boss_auto_upload(app)
         self._boss_patch(app)
         self._create_patch_script(app)
+        self._create_task(app)
 
         sandbox = get_master_input_sandbox(app.getJobObject(),app.extra) 
         c = StandardJobConfig('',sandbox,[],[],None)
@@ -858,6 +860,11 @@ class GaudiDiracRTHandler(IRuntimeHandler):
                 dataset_name = bdr.createDataset()
                 app.add_dataset_name(dataset_name)
             self._allRound.append(app.extra.metadata['round'])
+            taskInfo = {}
+            taskInfo['OutputDirectory'] = app.get_output_dir()
+            taskInfo['Dataset'] = app.get_dataset_name()
+            gDiracTask.updateTaskInfo(taskInfo)
+            gDiracTask.refreshTaskInfo()
 
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
@@ -997,6 +1004,21 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             app.extra.master_input_buffers[pf+'.patch_for_gangaboss'] = f.read()
             f.close()
 
+    def _create_task(self,app):
+        j = app.getJobObject()
+        if app.taskname:
+            taskName = app.taskname
+        elif 'JobGroup' in j.backend.settings:
+            taskName = j.backend.settings['JobGroup']
+        else:
+            taskName = 'Boss'
+
+        taskInfo = {}
+        taskInfo['SE'] = eval(getConfig('Boss')['DiracOutputDataSE'])[0]
+        gDiracTask.updateTaskInfo(taskInfo)
+
+        gDiracTask.createTask(taskName)
+
     def _create_gaudi_script(self,app):
         '''Creates the script that will be executed by DIRAC job. '''
         commandline = "'python ./gaudipython-wrapper.py'"
@@ -1023,12 +1045,24 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         loglfn = os.path.join(bdr.getLogDirName(), app.extra.output_name + '.log.tar.gz')
         wrapper = boss_script_wrapper(app.version, lfns, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
                                       app.eventNumber, app.runL, app.runH, app.local_rantrg, self._autoDownload)
+
         j = app.getJobObject()
         script = os.path.join(j.getInputWorkspace().getPath(), "boss_dirac.py")
         file=open(script,'w')
         file.write(wrapper)
         file.close()
         os.system('chmod +x %s' % script)
+
+        jobInfo = {}
+        jobInfo['EventNum'] = app.eventNumber
+        jobInfo['RunL'] = app.runL
+        jobInfo['RunH'] = app.runH
+        jobInfo['Seed'] = app.seed
+        jobInfo['GangaSubID'] = j.id
+        jobInfo['OutputFileName'] = lfns
+        jobInfo['OutputLogName'] = loglfn
+        gDiracTask.appendJobInfo(jobInfo)
+
         return script
 
     def _create_bossold_script(self,app):  

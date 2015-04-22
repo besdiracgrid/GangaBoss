@@ -16,6 +16,7 @@ import Ganga.Utility.logging
 from GangaBoss.Lib.Gaudi.RTHUtils import *
 from GangaBoss.Lib.Dataset.DatasetUtils import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
+from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Francesc import GaudiExtras
 from PythonOptionsParser import PythonOptionsParser
 from Ganga.Utility.Shell import Shell
@@ -237,8 +238,11 @@ class BossBaseSplitter(ISplitter):
                 print >>f, '%8d %8d %8d'%(jobProperty['runL'], jobProperty['runH'], jobProperty['eventNum'])
             f.close()
 
+        realTotalNum = 0
         subjobs=[]
         for jobProperty in self._jobProperties:
+            realTotalNum += jobProperty['eventNum']
+
             subjob = create_gaudi_subjob(job, job.inputdata)
 
             self._createSimJob(subjob, jobProperty, rndmSeed)
@@ -258,6 +262,18 @@ class BossBaseSplitter(ISplitter):
 
             subjobs.append(subjob)
             rndmSeed += 1
+
+        (runFrom, runTo) = get_runLH(job.application.extra.run_ranges)
+        round = get_round_nums(job.application.extra.run_ranges)[0]
+        taskInfo = {}
+        taskInfo['SplitterType'] = self.__class__.__name__
+        taskInfo['TotalEventNum'] = self.evtTotal
+        taskInfo['EventMax'] = self.evtMaxPerJob
+        taskInfo['RealTotalEventNum'] = realTotalNum
+        taskInfo['Round'] = round
+        taskInfo['RunFrom'] = runFrom
+        taskInfo['RunTo'] = runTo
+        gDiracTask.updateTaskInfo(taskInfo)
 
         return subjobs
 
@@ -279,6 +295,7 @@ class BossBaseSplitter(ISplitter):
         job.application.runL = jobProperty['runL']
         job.application.runH = jobProperty['runH']
         job.application.eventNumber = jobProperty['eventNum']
+        job.application.seed = rndmSeed
 
 #        job.application.extra.outputdata.location = fcdir
         job.application.extra.outputdata.files = simfilename

@@ -6,6 +6,7 @@ import Ganga.Utility.Config
 import Ganga.Utility.logging
 from Ganga.Core import BackendError
 from GangaBoss.Lib.Dataset.BDRegister import DfcOperation
+from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 
 logger = Ganga.Utility.logging.getLogger()
 config = Ganga.Utility.Config.getConfig('Boss')
@@ -98,7 +99,7 @@ class DiracScript:
     jobGroupPrefix += '_'
 
     def __init__(self):
-        self.settings = None
+        self.settings = {}
         self.input_sandbox = None
         self.output_sandbox = None
         self.exe = None
@@ -131,17 +132,17 @@ class DiracScript:
         if self.platform:
             contents += "j.setSystemConfig('%s')\n" % self.platform
         contents += '\n'
+
+        # set a unique job group name
+        jobGroup = self.settings['JobGroup'] if 'JobGroup' not in self.settings else gDiracTask.getTaskName()
+        if not jobGroup.startswith(DiracScript.jobGroupPrefix):
+            jobGroup = DiracScript.jobGroupPrefix + jobGroup
+        self.settings['JobGroup'] = '%s_t%s' % (jobGroup, gDiracTask.getTaskID())
+
         if self.settings:            
             contents += '# <-- user settings \n'
             for key in self.settings:
                 value = self.settings[key]
-
-                # Add username prefix for job group
-                if key == 'JobGroup':
-                    value = str(value)
-                    if not value.startswith(DiracScript.jobGroupPrefix):
-                        value = DiracScript.jobGroupPrefix + value
-
                 if type(value) == type(''):
                     contents += 'j.set%s("%s")\n' % (key,value)
                 else:

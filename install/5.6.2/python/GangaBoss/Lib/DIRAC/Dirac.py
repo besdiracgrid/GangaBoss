@@ -10,6 +10,7 @@ from Ganga.Core import BackendError
 from DiracUtils import *
 from DiracServer import DiracServer
 from GangaBoss.Lib.Dataset.BesDataset import *
+from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 from Ganga.Utility.util import unique
 
@@ -123,6 +124,8 @@ class Dirac(IBackend):
             raise BackendError('Dirac',err_msg)
         
         self.id = result['Value']     
+        j = self.getJobObject()
+        gDiracTask.addTaskJob(self.id, j.id)
         return type(self.id) == int
 
     def submit(self, subjobconfig, master_input_sandbox):
