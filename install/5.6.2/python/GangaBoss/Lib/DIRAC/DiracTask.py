@@ -2,7 +2,8 @@ from Ganga.Core import GangaException
 
 from DIRAC.Core.DISET.RPCClient                      import RPCClient
 
-#logger = Ganga.Utility.logging.getLogger()
+import Ganga.Utility.logging
+logger = Ganga.Utility.logging.getLogger()
 
 class DiracTask:
 
@@ -26,18 +27,24 @@ class DiracTask:
         self.__taskName = taskName
         result = self.__task.createTask(taskName, self.__taskInfo)
         if not result['OK']:
-            raise GangaException('Create task failed: %s' % result['Message'])
+            logger.warning('Create task failed: %s' % result['Message'])
+            return
         taskID = result['Value']
         self.__taskID = taskID
 
     def addTaskJob(self, jobID, subID):
+        if self.__taskID == 0:
+            return
         result = self.__task.addTaskJob(self.__taskID, jobID, self.__jobInfos[subID])
         if not result['OK']:
-            raise GangaException('Add task job failed: %s' % result['Message'])
+            logger.warning('Add task job failed: %s' % result['Message'])
+            return
         if subID + 1 == len(self.__jobInfos):
             self.__task.activateTask(self.__taskID)
 
     def refreshTaskInfo(self):
+        if self.__taskID == 0:
+            return
         self.__task.updateTaskInfo(self.__taskID, self.__taskInfo)
 
     def getTaskID(self):

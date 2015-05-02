@@ -134,7 +134,7 @@ class DiracScript:
         contents += '\n'
 
         # set a unique job group name
-        jobGroup = self.settings['JobGroup'] if 'JobGroup' not in self.settings else gDiracTask.getTaskName()
+        jobGroup = self.settings['JobGroup'] if 'JobGroup' in self.settings else gDiracTask.getTaskName()
         if not jobGroup.startswith(DiracScript.jobGroupPrefix):
             jobGroup = DiracScript.jobGroupPrefix + jobGroup
         self.settings['JobGroup'] = '%s_t%s' % (jobGroup, gDiracTask.getTaskID())
