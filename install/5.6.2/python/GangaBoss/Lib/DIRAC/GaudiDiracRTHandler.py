@@ -27,56 +27,15 @@ import hashlib
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-def gaudi_dirac_wrapper(cmdline):
-    return """#!/usr/bin/env python
-'''Script to run Gaudi application'''
-
-from os import curdir, system, environ, pathsep, sep, getcwd
-from os.path import join
-import sys
-
-def prependEnv(key, value):
-    if environ.has_key(key): value += (pathsep + environ[key])
-    environ[key] = value
-    print key
-    print value 
-
-# Main
-if __name__ == '__main__':
-
-    prependEnv('LD_LIBRARY_PATH', getcwd() + '/lib')
-    prependEnv('PYTHONPATH', getcwd() + '/InstallArea/python')
-    system('source bossenv_dirac_gaudirun.sh')
-    #sys.exit(system(%s)/256)
-  """ % cmdline
-
-#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
-
-#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
-
-def gaudi_run_wrapper():
-    return """#!/bin/bash
-
-bossVer=$1
-
-besRoot=/cvmfs/boss.cern.ch
-cd ${besRoot}/*/${bossVer}
-source setup.sh
-source scripts/${bossVer}/setup.sh
-source dist/${bossVer}/TestRelease/*/cmt/setup.sh
-cd $OLDPWD
-
-gaudirun.py -n -o options_rantrg.opts options.opts data.opts
-"""
-
 def boss_run_wrapper():
     return """#!/bin/bash
 
-bossVer=$1
-prefix=$2
-extraopts=$3
+bossRepo=$1
+bossVer=$2
+prefix=$3
+extraopts=$4
 
-besRoot=/cvmfs/boss.cern.ch
+besRoot="/cvmfs/${bossRepo}"
 cd ${besRoot}/*/${bossVer}
 source setup.sh
 source scripts/${bossVer}/setup.sh
@@ -85,8 +44,10 @@ cd $OLDPWD
 
 export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so_3:$LD_LIBRARY_PATH
 
+echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/slc5_amd64_gcc43/database\\";" >> ${prefix}data.opts
+
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
-boss.exe ${prefix}final.opts 1>>${prefix}bosslog 2>>${prefix}bosserr
+(time boss.exe ${prefix}final.opts) 1>>${prefix}bosslog 2>>${prefix}bosserr
 result=$?
 if [ $result != 0 ]; then 
    echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
@@ -97,6 +58,15 @@ if ! ( grep -q 'Application Manager Finalized successfully' ${prefix}bosslog && 
    echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
    exit 2
 fi
+"""
+
+def rantrg_get_wrapper():
+    return """#!/bin/bash
+
+runL=$1
+runH=$2
+
+(time besdirac-dms-rantrg-get -r $runL -R $runH) 1>>rantrg.log 2>>rantrg.err
 """
 
 def boss_script_wrapper(bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
@@ -128,14 +98,13 @@ delDisableWatchdog = False
 
 logFile = open('script.log', 'w')
 errFile = open('script.err', 'w')
-rantrgLogFile = open('rantrg.log', 'w+')
-rantrgErrFile = open('rantrg.err', 'w')
 
 jobID = os.environ.get('DIRACJOBID', '0')
 siteName = DIRAC.siteName()
 hostname = socket.gethostname()
 
 logJobInfo = False
+bossRepo = 'boss.cern.ch'
 
 bossVer = '%s'
 lfns = %s
@@ -156,7 +125,7 @@ def getRantrgInfo():
     filelist = []
 
     import sqlite3
-    sql3File = '/cvmfs/boss.cern.ch/slc5_amd64_gcc43/database/offlinedb.db'
+    sql3File = '/cvmfs/%s/slc5_amd64_gcc43/database/offlinedb.db' % bossRepo
     try:
         conn = sqlite3.connect(sql3File)
         c = conn.cursor()
@@ -356,8 +325,9 @@ def setJobStatus(message):
             print >>errFile, 'setJobStatus error: %s' % result
 
 def setRantrgSEJobStatus():
-    rantrgLogFile.seek(0)
+    rantrgLogFile = open('rantrg.log')
     rantrgOutput = rantrgLogFile.read()
+    rantrgLogFile.close()
     m = re.search('^Determine SE: (.*)$', rantrgOutput, re.M)
     if m:
         rantrgSe = m.group(1)
@@ -471,22 +441,21 @@ def startRantrgDownload():
     # download random trigger files
     setJobStatus('Downloading Random Trigger')
     disableWatchdog()
-    result = cmd(['./gaudi_run.sh', bossVer])
-    return Popen(['besdirac-dms-rantrg-get', '-j', 'options_rantrg.opts'], stdout=rantrgLogFile, stderr=rantrgErrFile)
+    return Popen(['./rantrg_get.sh', str(runL), str(runH)], stdout=logFile, stderr=errFile)
 
 def startSimulation():
     setJobStatus('Simulation')
 
-    startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['./boss_run.sh', bossVer])
+    startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['./boss_run.sh', bossRepo, bossVer])
     print >>logFile, startcmd
     print >>errFile, startcmd
     logFile.flush()
     errFile.flush()
 
-    return Popen(['./boss_run.sh', bossVer], stdout=logFile, stderr=errFile)
+    return Popen(['./boss_run.sh', bossRepo, bossVer], stdout=logFile, stderr=errFile)
 
 def endSimulation():
-    endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['./boss_run.sh', bossVer], '='*80)
+    endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['./boss_run.sh', bossRepo, bossVer], '='*80)
     print >>logFile, endcmd
     print >>errFile, endcmd
     logFile.flush()
@@ -503,17 +472,35 @@ def generateLocalRantrgOpt(replacePath='', newPath=''):
 def checkRantrgDownloadStatus():
     pass
 
-def checkEnvironment():
-    try:
-        os.listdir('/cvmfs/boss.cern.ch')
-    except OSError as e:
-        print >>errFile, 'List directory "/cvmfs/boss.cern.ch" failed: %s' % e
+def checkRepo(repo):
+    repoDir = os.path.join('/cvmfs', repo)
 
-    if not os.path.isdir('/cvmfs/boss.cern.ch'):
-        setJobStatus('BOSS cvmfs not found')
+    try:
+        os.listdir(repoDir)
+    except OSError as e:
+        print >>errFile, 'List directory "%s" failed: %s' % (repoDir, e)
+
+    if not os.path.isdir(repoDir):
         return False
 
     return True
+
+def checkEnvironment():
+    diracGridType, place, country = siteName.split('.')
+    if country == 'cn':
+        repos = ['bes.ihep.ac.cn', 'boss.cern.ch']
+    else:
+        repos = ['boss.cern.ch', 'bes.ihep.ac.cn']
+
+    for repo in repos:
+        if checkRepo(repo):
+            global bossRepo
+            bossRepo = repo
+            setJobStatus('BOSS cvmfs repo: %s' % repo)
+            return True
+
+    setJobStatus('BOSS cvmfs not found')
+    return False
 
 def bossjob():
     disableWatchdog()
@@ -542,7 +529,7 @@ def bossjob():
                 generateLocalRantrgOpt()
 
         if not (rantrgMethod and localRantrgPath):
-            if runH > runL:
+            if runH != runL:
                 print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
                 setJobStatus('Can not do reconstruction on this site with split by event')
                 return 71
@@ -637,9 +624,9 @@ def bossjob():
         setJobStatus('Reconstruction')
         setJobInfo('Start Reconstruction')
         if rantrgMethod:
-            result = cmd(['./boss_run.sh', bossVer, 'rec', 'extra.opts'])
+            result = cmd(['./boss_run.sh', bossRepo, bossVer, 'rec', 'extra.opts'])
         else:
-            result = cmd(['./boss_run.sh', bossVer, 'rec'])
+            result = cmd(['./boss_run.sh', bossRepo, bossVer, 'rec'])
 
         if result:
             setJobStatus('Reconstruction Error: %s' % result)
@@ -654,7 +641,7 @@ def bossjob():
         # run ana
         setJobStatus('Analysis')
         setJobInfo('Start Analysis')
-        result = cmd(['./boss_run.sh', bossVer, 'ana'])
+        result = cmd(['./boss_run.sh', bossRepo, bossVer, 'ana'])
 
         if result:
             setJobStatus('Analysis Error: %s' % result)
@@ -707,7 +694,7 @@ if __name__ == '__main__':
 
     # file executable
     os.chmod('boss_run.sh', 0755)
-    os.chmod('gaudi_run.sh', 0755)
+    os.chmod('rantrg_get.sh', 0755)
 
     # prepare
     cmd(['date'])
@@ -756,80 +743,6 @@ if __name__ == '__main__':
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
-def boss_env_wrapper():   
-    return """#!/bin/bash
-exec 1>bosslog
-exec 2>bosserr
-
-touch DISABLE_WATCHDOG_CPU_WALLCLOCK_CHECK
-
-echo -e -n 'export BESROOT=/cvmfs/boss.cern.ch
-cd $BESROOT/slc5_amd64_gcc43/###BOSS_VERSION###/
-pwd
-ls
-cat setup.sh
-source setup.sh
-source scripts/###BOSS_VERSION###/setup.sh
-source dist/6.6.4.p01/TestRelease/*/cmt/setup.sh
-cd $OLDPWD
-' > bossenv.sh
-
-echo "Node name: `uname -n`"
-date
-dirac-proxy-info
-
-ls -al
-
-./job-setappstatus -m 'Start Simulation'
-
-cat /cvmfs/boss.cern.ch/slc5_amd64_gcc43/###BOSS_VERSION###/setup.sh
-
-bash -c 'source bossenv.sh
-gaudirun.py -n -v -o options.opts options.pkl data.py
-boss.exe options.opts
-result=$?
-if [ $result != 0 ]; then 
-   echo "ERROR: boss.exe on simulation job failed"
-   exit $result
-fi
-gaudirun.py -n -o options.py options.pkl data.py
-rawfile=`python -c "print eval(open('\\''options.py'\\'').read())['\\''RootCnvSvc'\\'']['\\''digiRootOutputFile'\\'']"`
-if [ ! -f $rawfile ]; then
-   echo "ERROR: $rawfile not generated"
-   exit 2
-fi
-'
-
-date
-
-if [ -f "recoptions.pkl" ]; then
-   ./job-setappstatus -m 'Start Random Trigger Downloading'
-   
-   ls -Al
-   touch DISABLE_WATCHDOG_CPU_WALLCLOCK_CHECK
-#   besdirac-dms-rantrg-get -j options.opts
-   ls -Al
-#   rm -f DISABLE_WATCHDOG_CPU_WALLCLOCK_CHECK
-
-   ./job-setappstatus -m 'Start Reconstruction'
-
-   bash -c 'source bossenv.sh
-gaudirun.py -n -v -o recoptions.opts recoptions.pkl recdata.py
-boss.exe recoptions.opts
-result=$?
-if [ $result != 0 ]; then
-   echo "ERROR: boss.exe on reconstruction job failed"
-   exit $result
-fi
-'
-
-   ./job-setappstatus -m 'Reconstruction Successfully'
-fi
-
-date
-"""
-
 class GaudiDiracRTHandler(IRuntimeHandler):
     """The runtime handler to run Gaudi jobs on the Dirac backend"""
 
@@ -838,8 +751,8 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._autoDownload = ''
 
     def master_prepare(self,app,appconfig):
-        app.extra.master_input_buffers['gaudi_run.sh'] = gaudi_run_wrapper()
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
+        app.extra.master_input_buffers['rantrg_get.sh'] = rantrg_get_wrapper()
 
         self._boss_auto_upload(app)
         self._boss_patch(app)
@@ -890,9 +803,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
                        '["xmlcatalog_file:pool_xml_catalog.xml"]\n'
 #            app.extra.input_buffers['data.py'] += cat_opts
 
-        #script = self._create_gaudi_script(app) # comment out by zhangxm
         script = self._create_boss_script(app)
-#        script = self._create_bossold_script(app)
         sandbox = get_input_sandbox(app.extra)
         app.extra.outputsandbox += ['script.log', 'script.err', 'rantrg.log', 'rantrg.err', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr', 'anabosslog', 'anabosserr']
         outputsandbox = app.extra.outputsandbox 
@@ -1026,22 +937,6 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         gDiracTask.createTask(taskName)
 
-    def _create_gaudi_script(self,app):
-        '''Creates the script that will be executed by DIRAC job. '''
-        commandline = "'python ./gaudipython-wrapper.py'"
-        if is_gaudi_child(app):
-            commandline = "'boss.exe jobOptions_sim.txt'"
-        logger.debug('Command line: %s: ', commandline)
-        wrapper = gaudi_dirac_wrapper(commandline)
-        #logger.error("zhangxm log: gaudi-script.py: %s" % wrapper)
-        j = app.getJobObject()
-        script = "%s/gaudi-script.py" % j.getInputWorkspace().getPath()
-        file = open(script,'w')
-        file.write(wrapper)
-        file.close()
-        os.system('chmod +x %s' % script)
-        return script
-
     def _create_boss_script(self,app):
         '''Creates the script that will set the Boss environment on grid'''
         bdr = BDRegister(app.extra.metadata)
@@ -1070,18 +965,6 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         jobInfo['OutputLogName'] = loglfn
         gDiracTask.appendJobInfo(jobInfo)
 
-        return script
-
-    def _create_bossold_script(self,app):  
-        '''Creates the script that will set the Boss environment on grid'''
-        wrapper = boss_env_wrapper()
-        wrapper=wrapper.replace('###BOSS_VERSION###',app.version)
-        j = app.getJobObject()
-        script = "%s/bossenv_dirac.sh" % j.getInputWorkspace().getPath()
-        file=open(script,'w')
-        file.write(wrapper)
-        file.close()
-        os.system('chmod +x %s' % script)
         return script
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
