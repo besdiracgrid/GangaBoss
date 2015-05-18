@@ -35,6 +35,8 @@ bossVer=$2
 prefix=$3
 extraopts=$4
 
+logsize=$((32*1024*1024))
+
 besRoot="/cvmfs/${bossRepo}"
 cd ${besRoot}/*/${bossVer}
 source setup.sh
@@ -47,12 +49,14 @@ export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so
 echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/slc5_amd64_gcc43/database\\";" >> ${prefix}data.opts
 
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
-(time boss.exe ${prefix}final.opts) 1>>${prefix}bosslog 2>>${prefix}bosserr
+(time boss.exe ${prefix}final.opts) 1> >(tail -c ${logsize} > ${prefix}bosslog) 2> >(tail -c ${logsize} > ${prefix}bosserr)
 result=$?
 if [ $result != 0 ]; then 
    echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
    exit $result
 fi
+
+sync
 
 if ! ( grep -q 'Application Manager Finalized successfully' ${prefix}bosslog && grep -q 'INFO Application Manager Terminated successfully' ${prefix}bosslog ); then
    echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
@@ -261,6 +265,9 @@ def getLocalRantrgPath():
     elif rantrgMethod == 'Replace':
         rantrgPath = validateReplaceLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
         rantrgPath = rantrgPath[:rantrgPath.rfind('/')+1]
+
+    if not rantrgPath:
+        rantrgMethod = ''
 
     return rantrgMethod, rantrgPath
 
