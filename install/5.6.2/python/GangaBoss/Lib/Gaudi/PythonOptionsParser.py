@@ -323,4 +323,15 @@ class PythonOptionsParser:
         if self.opts_dict.has_key('EvtDecay') and self.opts_dict['EvtDecay'].has_key('userDecayTableName'):
             return self.opts_dict['EvtDecay']['userDecayTableName']
 
+    def get_ana_file_nos(self):
+        '''Get the analysis file number'''
+        file_nos = []
+        if self.opts_dict.has_key('NTupleSvc'):
+            if self.opts_dict['NTupleSvc'].has_key('Output'):
+                tuples = self.opts_dict['NTupleSvc']['Output']
+                # tuple output is returned as a list
+                for t in tuples:
+                    file_nos.append(t.split()[0])
+        return file_nos
+
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#

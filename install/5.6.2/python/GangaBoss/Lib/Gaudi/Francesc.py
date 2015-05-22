@@ -280,5 +280,6 @@ class GaudiExtras:
         self.input_buffers['data.opts'] = ''
         self.input_buffers['recdata.opts'] = ''
         self.input_buffers['anadata.opts'] = ''
+        self.ana_file_nos = ['FILE1']
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#

@@ -193,6 +193,7 @@ class Gaudi(Francesc):
 
             if anaoptsfiles:
                 anaoutputsandbox,anaoutputdata = anaparser.get_output(job)
+                self.extra.ana_file_nos = anaparser.get_ana_file_nos()
                 for temp_output in anaoutputdata:
                     temp_data_type = os.path.splitext(temp_output)[-1][1:]
                     temp_data_type = temp_data_type.strip()

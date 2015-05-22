@@ -47,6 +47,7 @@ def copy_app(app):
     cp_app.extra.data_type = app.extra.data_type.copy()
     cp_app.extra.metadata = app.extra.metadata.copy()
     cp_app.extra.run_ranges = app.extra.run_ranges[:]
+    cp_app.extra.ana_file_nos = app.extra.ana_file_nos[:]
     return cp_app 
 
 def create_gaudi_subjob(job, inputdata):
@@ -318,7 +319,8 @@ class BossBaseSplitter(ISplitter):
         recfilename = jobProperty['filename'] + '.' + job.application.extra.data_type['rec']
         anafilename = jobProperty['filename'] + '.' + job.application.extra.data_type['ana']
         opts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % recfilename
-        opts += 'NTupleSvc.Output = { "FILE1 DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % anafilename
+        if job.application.extra.ana_file_nos:
+            opts += 'NTupleSvc.Output = { "%s DATAFILE=\'%s\' OPT=\'NEW\' TYP=\'ROOT\'"};\n' % (job.application.extra.ana_file_nos[0], anafilename)
         opts += 'ApplicationMgr.EvtMax = %d;\n' % jobProperty['eventNum']
         logger.debug("zhangxm log: anadata.opts:%s", opts)
         job.application.extra.input_buffers['anadata.opts'] += opts
