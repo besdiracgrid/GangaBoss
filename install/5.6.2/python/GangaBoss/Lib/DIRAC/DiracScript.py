@@ -5,7 +5,6 @@ import string
 import Ganga.Utility.Config
 import Ganga.Utility.logging
 from Ganga.Core import BackendError
-from GangaBoss.Lib.Dataset.BDRegister import DfcOperation
 from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 
 logger = Ganga.Utility.logging.getLogger()
@@ -94,10 +93,6 @@ class DiracApplication:
 class DiracScript:
     '''Collects info for and writes script that creates the DIRAC job.'''
 
-    dfcOp = DfcOperation()
-    jobGroupPrefix = 'prod' if dfcOp.getGroupName() == 'production' else dfcOp.getUserName()
-    jobGroupPrefix += '_'
-
     def __init__(self):
         self.settings = {}
         self.input_sandbox = None
@@ -133,11 +128,7 @@ class DiracScript:
             contents += "j.setSystemConfig('%s')\n" % self.platform
         contents += '\n'
 
-        # set a unique job group name
-        jobGroup = self.settings['JobGroup'] if 'JobGroup' in self.settings else gDiracTask.getTaskName()
-        if not jobGroup.startswith(DiracScript.jobGroupPrefix):
-            jobGroup = DiracScript.jobGroupPrefix + jobGroup
-        self.settings['JobGroup'] = '%s_t%s' % (jobGroup, gDiracTask.getTaskID())
+        self.settings['JobGroup'] = gDiracTask.getJobGroup()
 
         if self.settings:            
             contents += '# <-- user settings \n'

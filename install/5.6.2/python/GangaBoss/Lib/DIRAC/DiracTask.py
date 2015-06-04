@@ -15,43 +15,57 @@ class DiracTask:
         self.__taskID = 0
         self.__taskName = 'UNKNOWN'
         self.__taskInfo = {}
-        self.__jobInfos = []
+        self.__jobInfos = {}
+        self.__jobInfoList = []
+        self.__jobGroup = 'unknown'
 
     def updateTaskInfo(self, taskInfo):
         self.__taskInfo.update(taskInfo)
 
     def appendJobInfo(self, jobInfo):
-        self.__jobInfos.append(jobInfo)
+        self.__jobInfoList.append(jobInfo)
 
-    def createTask(self, taskName):
+    def setTaskName(self, taskName):
         self.__taskName = taskName
-        result = self.__task.createTask(taskName, self.__taskInfo)
+
+    def setJobGroup(self, jobGroup):
+        self.__jobGroup = jobGroup
+
+    def addTaskJob(self, jobID, subID):
+        self.__jobInfos[jobID] = self.__jobInfoList[subID]
+        if subID + 1 == len(self.__jobInfoList):
+            self.__createTask()
+
+    def __createTask(self):
+        result = self.__task.createTask(self.__taskName, self.__taskInfo, self.__jobInfos)
         if not result['OK']:
             logger.warning('Create task failed: %s' % result['Message'])
             return
-        taskID = result['Value']
-        self.__taskID = taskID
-
-    def addTaskJob(self, jobID, subID):
-        if self.__taskID == 0:
-            return
-        result = self.__task.addTaskJob(self.__taskID, jobID, self.__jobInfos[subID])
-        if not result['OK']:
-            logger.warning('Add task job failed: %s' % result['Message'])
-            return
-        if subID + 1 == len(self.__jobInfos):
-            self.__task.activateTask(self.__taskID)
-
-    def refreshTaskInfo(self):
-        if self.__taskID == 0:
-            return
-        self.__task.updateTaskInfo(self.__taskID, self.__taskInfo)
+        self.__taskID = result['Value']
 
     def getTaskID(self):
         return self.__taskID
 
     def getTaskName(self):
         return self.__taskName
+
+    def getAllJobGroups(self):
+        allJobGroups = []
+
+        rpcClient = RPCClient( "WorkloadManagement/JobMonitoring" )
+        result = rpcClient.getProductionIds()
+        if result['OK']:
+            allJobGroups += result['Value']
+
+        rpcClient = RPCClient( "Accounting/ReportGenerator" )
+        result = rpcClient.listUniqueKeyValues( 'Job' )
+        if result['OK']:
+            allJobGroups += result['Value']['JobGroup']
+
+        return allJobGroups
+
+    def getJobGroup(self):
+        return self.__jobGroup
 
 
 gDiracTask = DiracTask()

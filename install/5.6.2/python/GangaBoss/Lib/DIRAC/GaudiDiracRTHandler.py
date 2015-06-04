@@ -8,6 +8,7 @@ from DiracUtils import *
 from DiracScript import *
 from GangaBoss.Lib.Gaudi.RTHUtils import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
+from GangaBoss.Lib.Dataset.BDRegister import DfcOperation
 from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Ganga.GPIDev.Lib.File import FileBuffer, File
 from Ganga.Utility.Shell import Shell
@@ -764,7 +765,8 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._boss_auto_upload(app)
         self._boss_patch(app)
         self._create_patch_script(app)
-        self._create_task(app)
+        self._init_task(app)
+        self._job_group(app)
 
         sandbox = get_master_input_sandbox(app.getJobObject(),app.extra) 
         c = StandardJobConfig('',sandbox,[],[],None)
@@ -784,7 +786,6 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             taskInfo['OutputDirectory'] = app.get_output_dir()
             taskInfo['Dataset'] = app.get_dataset_name()
             gDiracTask.updateTaskInfo(taskInfo)
-            gDiracTask.refreshTaskInfo()
 
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
@@ -929,7 +930,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             app.extra.master_input_buffers[pf+'.patch_for_gangaboss'] = f.read()
             f.close()
 
-    def _create_task(self,app):
+    def _init_task(self,app):
         j = app.getJobObject()
         if app.taskname:
             taskName = app.taskname
@@ -942,7 +943,28 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         taskInfo['SE'] = eval(getConfig('Boss')['DiracOutputDataSE'])[0]
         gDiracTask.updateTaskInfo(taskInfo)
 
-        gDiracTask.createTask(taskName)
+        gDiracTask.setTaskName(taskName)
+
+    def _job_group(self,app):
+        # set up a unique job group name
+        j = app.getJobObject()
+
+        dfcOp = DfcOperation()
+        jobGroupPrefix = 'prod' if dfcOp.getGroupName() == 'production' else dfcOp.getUserName()
+        jobGroupPrefix += '_'
+
+        jobGroup = j.backend.settings['JobGroup'] if 'JobGroup' in j.backend.settings else gDiracTask.getTaskName()
+        if not jobGroup.startswith(jobGroupPrefix):
+            jobGroup = jobGroupPrefix + jobGroup
+
+        allJobGroups = gDiracTask.getAllJobGroups()
+        index = 1
+        while True:
+            jobGroupTemp = jobGroup + '_%d'%index
+            if jobGroupTemp not in allJobGroups:
+                break
+            index += 1
+        gDiracTask.setJobGroup(jobGroupTemp)
 
     def _create_boss_script(self,app):
         '''Creates the script that will set the Boss environment on grid'''
