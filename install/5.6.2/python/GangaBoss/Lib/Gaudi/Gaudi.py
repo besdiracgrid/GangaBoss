@@ -277,6 +277,8 @@ class Gaudi(Francesc):
 
         platform = get_user_platform()
         lib_dir = os.path.join(self.user_workarea, 'InstallArea', platform, 'lib')
+        if not os.path.isdir(lib_dir):
+            return
         lib_list = os.listdir(lib_dir)
         for lib_file in lib_list:
             if lib_file.endswith('.so'):
