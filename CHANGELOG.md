@@ -1,6 +1,18 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.0.8 (2015-06-08)
+---------------------
+
+### New Feature
+- Add DIRAC task manager support
+- Use opts instead of pkl format for job options
+- Add bes CVMFS repository and choose the best one automatically
+- Restrict boss log size
+
+### Bug
+- Fix bug of analysis jobs when not "FILE1"
+
 v1.0.7.2 (2015-02-11)
 ---------------------
 
@@ -25,7 +37,7 @@ v1.0.7 (2015-01-14)
 
 ### New Feature
 - Support using local random trigger file for reconstruction on specified site
-- Support using user's workarea
+- Support using user workarea
 - Support simulation + reconstruction + analysis job
 - Automatically upload specified files to SE and download while running
 - Use patch script to do some more prepare work before running BOSS
