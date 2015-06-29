@@ -958,12 +958,15 @@ class GaudiDiracRTHandler(IRuntimeHandler):
             jobGroup = jobGroupPrefix + jobGroup
 
         allJobGroups = gDiracTask.getAllJobGroups()
-        index = 1
-        while True:
-            jobGroupTemp = jobGroup + '_%d'%index
-            if jobGroupTemp not in allJobGroups:
-                break
-            index += 1
+        if jobGroup not in allJobGroups:
+            jobGroupTemp = jobGroup
+        else:
+            index = 2
+            while True:
+                jobGroupTemp = '%s_%d'%(jobGroup,index)
+                if jobGroupTemp not in allJobGroups:
+                    break
+                index += 1
         gDiracTask.setJobGroup(jobGroupTemp)
 
     def _create_boss_script(self,app):
