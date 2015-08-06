@@ -125,7 +125,7 @@ class DiracScript:
 #                        (str(self.outputdata.files),self.outputdata.location,
 #                         config['DiracOutputDataSE'])
         if self.platform:
-            contents += "j.setSystemConfig('%s')\n" % self.platform
+            contents += "j.setPlatform('%s')\n" % self.platform
         contents += '\n'
 
         self.settings['JobGroup'] = gDiracTask.getJobGroup()
