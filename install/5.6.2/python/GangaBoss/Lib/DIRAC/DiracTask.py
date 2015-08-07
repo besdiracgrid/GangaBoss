@@ -42,6 +42,10 @@ class DiracTask:
             logger.warning('Create task failed: %s' % result['Message'])
             return
         self.__taskID = result['Value']
+        print('')
+        print('The DIRAC task ID   of the submitted jobs is : %s' % self.__taskID)
+        print('The DIRAC task name of the submitted jobs is : %s' % self.__taskName)
+        print('')
 
     def getTaskID(self):
         return self.__taskID
