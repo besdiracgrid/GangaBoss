@@ -13,6 +13,8 @@ from GangaBoss.Lib.DIRAC.DiracTask import gDiracTask
 from Ganga.GPIDev.Lib.File import FileBuffer, File
 from Ganga.Utility.Shell import Shell
 
+from DIRAC import gConfig
+
 from DIRAC.Core.Base import Script
 Script.initialize()
 
@@ -822,6 +824,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         dirac_script.exe = DiracApplication(app,script)
         dirac_script.platform = app.platform
         dirac_script.output_sandbox = outputsandbox
+        dirac_script.default_sites = gConfig.getValue('/Resources/Application/DefaultSites/%s' % DfcOperation().getGroupName(), [])
 
         if app.extra.inputdata:
             dirac_script.inputdata = DiracInputData(app.extra.inputdata)

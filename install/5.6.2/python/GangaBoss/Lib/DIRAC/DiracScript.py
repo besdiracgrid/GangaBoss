@@ -130,6 +130,9 @@ class DiracScript:
 
         self.settings['JobGroup'] = gDiracTask.getJobGroup()
 
+        if 'Destination' not in self.settings:
+            self.settings['Destination'] = self.default_sites
+
         if self.settings:            
             contents += '# <-- user settings \n'
             for key in self.settings:
