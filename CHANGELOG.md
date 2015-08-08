@@ -1,6 +1,16 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.0.9 (2015-08-08)
+---------------------
+
+### New Feature
+- Use the CS to get default sites list
+- Output the task ID after submission
+
+### Change
+- Use setPlatform instead of setSystemConfig for new DIRAC version
+
 v1.0.8 (2015-06-08)
 ---------------------
 
