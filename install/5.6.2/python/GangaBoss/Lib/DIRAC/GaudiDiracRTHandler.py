@@ -167,29 +167,35 @@ def getRantrgRoundInfo(roundNum):
     rantrgMethod = ''
     rantrgRoundPaths = []
 
-    diracGridType, place, country = siteName.split('.')
+    configPrefix = '/Resources/Applications/LocalRantrg'
+
+    # check if local rantrg is enabled
+    rantrgEnabled = gConfig.getValue('%s/%s/Enabled'%(configPrefix, siteName), False)
+    if not rantrgEnabled:
+        print >>logFile, 'Local random trigger is not enabled for %s' % siteName
+        return rantrgMethod, rantrgRoundPaths
 
     # search for available local random trigger data from the configuration server
-    rantrgAvailable = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Available'%(diracGridType, siteName), [])
+    rantrgAvailable = gConfig.getValue('%s/%s/Available'%(configPrefix, siteName), [])
     if roundNum not in rantrgAvailable:
-        print >>errFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
+        print >>logFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
         return rantrgMethod, rantrgRoundPaths
 
     # find if this round is configured individually
-    result = gConfig.getSections('/Resources/Sites/%s/%s/Data/LocalRantrg'%(diracGridType, siteName))
+    result = gConfig.getSections('%s/%s'%(configPrefix, siteName))
     if not result['OK']:
         print >>errFile, result['Message']
         return rantrgMethod, rantrgRoundPaths
     individualRounds = result['Value']
 
     if roundNum in individualRounds:
-        rantrgMethod = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Method'%(diracGridType, siteName, roundNum), '')
+        rantrgMethod = gConfig.getValue('%s/%s/%s/Method'%(configPrefix, siteName, roundNum), '')
         if rantrgMethod in ['New', 'Replace']:
-            rantrgRoundPaths = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/%s/Paths'%(diracGridType, siteName, roundNum), [])
+            rantrgRoundPaths = gConfig.getValue('%s/%s/%s/Paths'%(configPrefix, siteName, roundNum), [])
     else:
-        rantrgMethod = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Method'%(diracGridType, siteName), '')
+        rantrgMethod = gConfig.getValue('%s/%s/Method'%(configPrefix, siteName), '')
         if rantrgMethod in ['New', 'Replace']:
-            rantrgMainPath = gConfig.getValue('/Resources/Sites/%s/%s/Data/LocalRantrg/Path'%(diracGridType, siteName), '')
+            rantrgMainPath = gConfig.getValue('%s/%s/Path'%(configPrefix, siteName), '')
             if rantrgMainPath:
                 rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
 
@@ -824,7 +830,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         dirac_script.exe = DiracApplication(app,script)
         dirac_script.platform = app.platform
         dirac_script.output_sandbox = outputsandbox
-        dirac_script.default_sites = gConfig.getValue('/Resources/Application/DefaultSites/%s' % DfcOperation().getGroupName(), [])
+        dirac_script.default_sites = gConfig.getValue('/Resources/Applications/DefaultSites/%s' % DfcOperation().getGroupName(), [])
 
         if app.extra.inputdata:
             dirac_script.inputdata = DiracInputData(app.extra.inputdata)
