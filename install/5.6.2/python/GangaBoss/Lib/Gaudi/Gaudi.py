@@ -305,6 +305,10 @@ class Gaudi(Francesc):
         # the main round
         self.extra.metadata['round'] = get_round_nums(self.extra.run_ranges)[0]
 
+        # lower the metadata
+        self.extra.metadata['resonance'] = self.extra.metadata['resonance'].lower()
+        self.extra.metadata['eventType'] = self.extra.metadata['eventType'].lower()
+
         # automatically get the stream ID
         if not self.extra.metadata.has_key('streamId'):
             bdr = BDRegister(self.extra.metadata)
