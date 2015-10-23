@@ -715,6 +715,7 @@ if __name__ == '__main__':
     # prepare
     cmd(['date'])
     cmd(['uname', '-a'])
+    cmd(['ip', 'addr'])
     cmd(['lsb_release', '-a'])
     cmd(['ls', '-ltrA'])
 
