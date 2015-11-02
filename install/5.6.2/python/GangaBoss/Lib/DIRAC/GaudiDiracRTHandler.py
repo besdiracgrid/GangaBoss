@@ -49,7 +49,8 @@ cd $OLDPWD
 
 export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so_3:$LD_LIBRARY_PATH
 
-echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/slc5_amd64_gcc43/database\\";" >> ${prefix}data.opts
+# Do not need this line because it is default in the DatabaseConfig
+#echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/database\\";" >> ${prefix}data.opts
 
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
 (time boss.exe ${prefix}final.opts) 1> >(tail -c ${logsize} > ${prefix}bosslog) 2> >(tail -c ${logsize} > ${prefix}bosserr)
@@ -132,7 +133,7 @@ def getRantrgInfo():
     filelist = []
 
     import sqlite3
-    sql3File = '/cvmfs/%s/slc5_amd64_gcc43/database/offlinedb.db' % bossRepo
+    sql3File = '/cvmfs/%s/database/offlinedb.db' % bossRepo
     try:
         conn = sqlite3.connect(sql3File)
         c = conn.cursor()
@@ -798,7 +799,6 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
-        opts += 'DatabaseSvc.SqliteDbPath = "/cvmfs/boss.cern.ch/slc5_amd64_gcc43/database";\n'
         app.extra.input_buffers['data.opts'] += opts
 
         # extra lines for reconstruction and remove empty files
