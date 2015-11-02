@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.0.9.1 (2015-11-02)
+---------------------
+
+### Change
+- Change the sqlite database file path
+
 v1.0.9 (2015-08-08)
 ---------------------
 
