@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.0.9.2 (2015-11-08)
+---------------------
+
+### Bug
+- Add the line about sqlite path in the job option
+
 v1.0.9.1 (2015-11-02)
 ---------------------
 
