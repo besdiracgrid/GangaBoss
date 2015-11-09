@@ -49,8 +49,7 @@ cd $OLDPWD
 
 export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so_3:$LD_LIBRARY_PATH
 
-# Do not need this line because it is default in the DatabaseConfig
-#echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/database\\";" >> ${prefix}data.opts
+echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/database\\";" >> ${prefix}data.opts
 
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
 (time boss.exe ${prefix}final.opts) 1> >(tail -c ${logsize} > ${prefix}bosslog) 2> >(tail -c ${logsize} > ${prefix}bosserr)
