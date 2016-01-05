@@ -117,12 +117,15 @@ bossRepo = 'boss.cern.ch'
 bossVer = '%s'
 lfns = %s
 loglfn = '%s'
-se = '%s'
+seInput = '%s'
 eventNumber = %s
 runL = %s
 runH = %s
 useLocalRantrg = %s
 autoDownload = '%s'
+
+bossUploadSEs = gConfig.getValue('/Resources/Applications/BossUpload/Data', [seInput])
+bossLogSE = gConfig.getValue('/Resources/Applications/BossUpload/Log', seInput)
 
 """ % (bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
 
@@ -673,14 +676,21 @@ def bossjob():
     for lfn in lfns:
         setJobStatus('Uploading Data')
         setJobInfo('Start Uploading Data')
-        result = uploadData(lfn, se)
+        result = S_ERROR('No SE specified')
+        destSE = ''
+        for se in bossUploadSEs:
+            result = uploadData(lfn, se)
+            if result['OK']:
+                destSE = se
+                break
         if not result['OK']:
             print >>errFile, 'Upload Data Error:\\n%s' % result
             setJobStatus('Upload Data Error')
             setJobInfo('End Uploading Data with Error')
             setJobInfo('End Job with Error: %s' % 72)
             return 72
-        setJobInfo('End Uploading Data')
+        setJobStatus('Upload Data to %s successfully' % destSE)
+        setJobInfo('End Uploading Data to %s' % destSE)
 
         setJobStatus('Setting Metadata')
         setJobInfo('Start Setting Metadata')
@@ -751,7 +761,7 @@ if __name__ == '__main__':
 
     # upload log and reg
     setJobStatus('Uploading Log')
-    result = uploadLog(loglfn, 'IHEPD-USER')
+    result = uploadLog(loglfn, bossLogSE)
     if not result['OK']:
         setJobStatus('Upload Log Error')
 
