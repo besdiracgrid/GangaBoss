@@ -38,7 +38,7 @@ bossVer=$2
 prefix=$3
 extraopts=$4
 
-logsize=$((32*1024*1024))
+maxlogsize=$((32*1024*1024))
 
 besRoot="/cvmfs/${bossRepo}"
 cd ${besRoot}/*/${bossVer}
@@ -52,7 +52,7 @@ export LD_LIBRARY_PATH=`pwd`:`pwd`/custom_so_1:`pwd`/custom_so_2:`pwd`/custom_so
 echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/database\\";" >> ${prefix}data.opts
 
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
-(time boss.exe ${prefix}final.opts) 1> >(tail -c ${logsize} > ${prefix}bosslog) 2> >(tail -c ${logsize} > ${prefix}bosserr)
+(time boss.exe ${prefix}final.opts) 1> >(tail -c ${maxlogsize} > ${prefix}bosslog) 2> >(tail -c ${maxlogsize} > ${prefix}bosserr)
 result=$?
 if [ $result != 0 ]; then 
    echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
@@ -60,6 +60,7 @@ if [ $result != 0 ]; then
 fi
 
 sync
+sleep 5
 
 if ! ( grep -q 'Application Manager Finalized successfully' ${prefix}bosslog && grep -q 'INFO Application Manager Terminated successfully' ${prefix}bosslog ); then
    echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
@@ -716,6 +717,7 @@ if __name__ == '__main__':
     cmd(['date'])
     cmd(['uname', '-a'])
     cmd(['ip', 'addr'])
+    cmd(['/sbin/ifconfig'])
     cmd(['lsb_release', '-a'])
     cmd(['ls', '-ltrA'])
 
