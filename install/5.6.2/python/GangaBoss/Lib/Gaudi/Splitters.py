@@ -229,9 +229,9 @@ class BossBaseSplitter(ISplitter):
         self._prepare(job)
 
         if self.seed is None:
-            rndmSeed = self._getSeedStart()
+            seedStart = self._getSeedStart()
         else:
-            rndmSeed = self.seed
+            seedStart = self.seed
 
         if self.outputEvtNum:
             f = open(self.outputEvtNum, 'w')
@@ -241,6 +241,7 @@ class BossBaseSplitter(ISplitter):
 
         realTotalNum = 0
         subjobs=[]
+        rndmSeed = seedStart
         for jobProperty in self._jobProperties:
             realTotalNum += jobProperty['eventNum']
 
@@ -268,6 +269,7 @@ class BossBaseSplitter(ISplitter):
         round = get_round_nums(job.application.extra.run_ranges)[0]
         taskInfo = {}
         taskInfo['SplitterType'] = self.__class__.__name__
+        taskInfo['SeedStart'] = seedStart
         taskInfo['TotalEventNum'] = self.evtTotal
         taskInfo['EventMax'] = self.evtMaxPerJob
         taskInfo['RealTotalEventNum'] = realTotalNum
