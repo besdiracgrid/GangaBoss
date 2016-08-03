@@ -166,15 +166,15 @@ class DfcOperation:
         metaDic['streamId']  = metadata.get('streamId',  'streamxxx')
         metaDic['dataType']  = metadata.get('dataType',  'unknown')
         metaDic['Path']      = self.getRootDir() + ('/Log' if metadata.get('dataType', 'unknown').lower() == 'log' else '/File')
-        runFrom = metadata.get('runFrom', '0')
-        runTo = metadata.get('runTo', '0')
+        runFrom = metadata.get('runFrom', 0)
+        runTo = metadata.get('runTo', 0)
         metaDic['runL']      = {'>=': runFrom}
         metaDic['runH']      = {'<=': runTo}
 
         datasetName = '%s_%s_%s_%s_%s_%s_%s_%s_%s' % (self._getDatasetPrefix(),
                                                       metaDic['resonance'], metaDic['bossVer'], metaDic['eventType'], metaDic['round'],
                                                       runFrom, runTo, metaDic['streamId'], metaDic['dataType'])
-        result = self.client.addDataset('/dataset/'+datasetName, metaDic)
+        result = self.client.addDataset({'/dataset/'+datasetName: metaDic})
         if not result['OK']:
             logger.warning("Can not create dataset: %s", result['Message'])
 
