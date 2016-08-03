@@ -6,6 +6,7 @@ v1.1.0 (2016-08-03)
 
 ### Change
 - "addDataset" arguments changed in the new DIRAC version
+- "auto" SE will choose from the CS
 
 v1.0.9.3 (2016-01-05)
 ---------------------
