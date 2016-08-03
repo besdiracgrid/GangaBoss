@@ -1,6 +1,19 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.1.0 (2016-08-03)
+-------------------
+
+### Change
+- "addDataset" arguments changed in the new DIRAC version
+
+v1.0.9.3 (2016-01-05)
+---------------------
+
+### New Feature
+- Add "SeedStart" in task information
+- Select multiple SEs from the DIRAC CS
+
 v1.0.9.2 (2015-11-08)
 ---------------------
 
