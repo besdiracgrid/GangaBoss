@@ -124,8 +124,10 @@ runH = %s
 useLocalRantrg = %s
 autoDownload = '%s'
 
-bossUploadSEs = [seInput]
-#bossUploadSEs = gConfig.getValue('/Resources/Applications/BossUpload/Data', [seInput])
+if seInput.lower() == 'auto':
+  bossUploadSEs = gConfig.getValue('/Resources/Applications/BossUpload/Data', [seInput])
+else:
+  bossUploadSEs = [seInput]
 bossLogSE = gConfig.getValue('/Resources/Applications/BossUpload/Log', seInput)
 
 """ % (bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload)
