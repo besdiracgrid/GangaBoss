@@ -8,7 +8,7 @@ from Ganga.GPIDev.Schema import *
 from Ganga.Core import ApplicationConfigurationError
 import Ganga.Utility.logging
 from GaudiUtils import *
-from GaudiRunTimeHandler import * 
+from GaudiRunTimeHandler import *
 from PythonOptionsParser import PythonOptionsParser
 from Francesc import *
 from GangaBoss.Lib.Dataset.BDRegister import BDRegister
@@ -23,7 +23,7 @@ logger = Ganga.Utility.logging.getLogger()
 
 def GaudiDocString(appname):
     "Provide the documentation string for each of the Gaudi based applications"
-    
+
     doc="""The Gaudi Application handler
 
     The Gaudi application handler is for running  GAUDI framework
@@ -54,11 +54,11 @@ def GaudiDocString(appname):
 
     """
     return doc.replace( "Gaudi", appname )
- 
+
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 class Gaudi(Francesc):
-    
+
     _name = 'Gaudi'
     __doc__ = GaudiDocString(_name)
     _category = 'applications'
@@ -79,18 +79,18 @@ class Gaudi(Francesc):
     schema['appname'] = SimpleItem(defvalue=None,typelist=['str','type(None)'],
                                    hidden=1,doc=docstr)
     schema['configured'] = SimpleItem(defvalue=None,hidden=0,copyable=0,
-                                      typelist=['str','type(None)']) 
+                                      typelist=['str','type(None)'])
     docstr = 'A python configurable string that will be appended to the '  \
              'end of the options file. Can be multiline by using a '  \
              'notation like \nHistogramPersistencySvc().OutputFile = '  \
              '\"myPlots.root"\\nEventSelector().PrintFreq = 100\n or by '  \
              'using triple quotes around a multiline string.'
     schema['extraopts'] = SimpleItem(defvalue=None,
-                                     typelist=['str','type(None)'],doc=docstr) 
+                                     typelist=['str','type(None)'],doc=docstr)
     docstr = 'User metadata'
-    schema['metadata'] = SimpleItem(defvalue={},doc=docstr) 
+    schema['metadata'] = SimpleItem(defvalue={},doc=docstr)
     docstr = 'Task name'
-    schema['taskname'] = SimpleItem(defvalue='',doc=docstr) 
+    schema['taskname'] = SimpleItem(defvalue='',doc=docstr)
     docstr = 'Long idle job'
     schema['long_idle'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Create dataset'
@@ -117,16 +117,16 @@ class Gaudi(Francesc):
     def _auto__init__(self):
         """bootstrap Gaudi applications. If called via a subclass
         set up some basic structure like version platform..."""
-        if not self.appname: return 
+        if not self.appname: return
         self._init(self.appname,True)
-       
-            
+
+
     def master_configure(self):
         self._validate_version()
 
         job = self.getJobObject()
         self._master_configure()
-        inputs = self._check_inputs()         
+        inputs = self._check_inputs()
         optsfiles = [fileitem.name for fileitem in self.optsfile]
         recoptsfiles = [fileitem.name for fileitem in self.recoptsfile]
         anaoptsfiles = [fileitem.name for fileitem in self.anaoptsfile]
@@ -154,14 +154,14 @@ class Gaudi(Francesc):
             if anaoptsfiles:
                 self.extra.master_input_buffers['anaoptions.opts'] = anaparser.opts_str
         inputdata = parser.get_input_data()
-  
+
         # If user specified a dataset, ignore optsfile data but warn the user.
         if len(inputdata.files) > 0:
             if job.inputdata:
                 msg = 'A dataset was specified for this job but one was ' \
                       'also defined in the options file. Data in the options '\
-                      'file will be ignored...hopefully this is OK.' 
-                logger.warning(msg)            
+                      'file will be ignored...hopefully this is OK.'
+                logger.warning(msg)
             else:
                 logger.info('Using the inputdata defined in the options file.')
                 self.extra.inputdata = inputdata
@@ -230,7 +230,7 @@ class Gaudi(Francesc):
         file = gzip.GzipFile(input_dir + '/gaudi-env.py.gz','wb')
         file.write('gaudi_env = %s' % str(self.shell.env))
         file.close()
-        
+
         return (inputs, self.extra) # return (changed, extra)
 
     def configure(self,master_appconfig):
@@ -363,7 +363,7 @@ class Gaudi(Francesc):
     def _check_inputs(self):
         """Checks the validity of some of user's entries for Gaudi schema"""
 
-        self._check_gaudi_inputs(self.optsfile,self.appname)        
+        self._check_gaudi_inputs(self.optsfile,self.appname)
         if self.package is None:
             msg = "The 'package' attribute must be set for application. "
             raise ApplicationConfigurationError(None,msg)
@@ -379,35 +379,35 @@ class Gaudi(Francesc):
                 logger.error('Cannot find the default opts file for ' % \
                              self.appname + os.sep + self.version)
             inputs = ['optsfile']
-            
+
         return inputs
 
     def readInputData(self,optsfiles,extraopts=False):
         """Returns a BesDataSet object from a list of options files. The
         optional argument extraopts will decide if the extraopts string inside
-        the application is considered or not. 
-        
+        the application is considered or not.
+
         Usage examples:
         # Create an BesDataset object with the data found in the optionsfile
         l=DaVinci(version='v22r0p2').readInputData([\"~/cmtuser/\" \
-        \"DaVinci_v22r0p2/Tutorial/Analysis/options/Bs2JpsiPhi2008.py\"]) 
+        \"DaVinci_v22r0p2/Tutorial/Analysis/options/Bs2JpsiPhi2008.py\"])
         # Get the data from an options file and assign it to the jobs inputdata
         field
         j.inputdata = j.application.readInputData([\"~/cmtuser/\" \
         \"DaVinci_v22r0p2/Tutorial/Analysis/options/Bs2JpsiPhi2008.py\"])
-        
+
         # Assuming you have data in your extraopts, you can use the extraopts.
         # In this case your extraopts need to be fully parseable by gaudirun.py
         # So you must make sure that you have the proper import statements.
         # e.g.
-        from Gaudi.Configuration import * 
+        from Gaudi.Configuration import *
         # If you mix optionsfiles and extraopts, as usual extraopts may
         # overwright your options
-        # 
+        #
         # Use this to create a new job with data from extraopts of an old job
         j=Job(inputdata=jobs[-1].application.readInputData([],True))
         """
-        
+
         def dummyfile():
             temp_fd,temp_filename=tempfile.mkstemp(text=True,suffix='.py')
             os.write(temp_fd,"#Dummy file to keep the Optionsparser happy")
@@ -420,10 +420,10 @@ class Gaudi(Francesc):
         if len(optsfiles)==0: optsfiles.append(dummyfile())
 
         self._getshell()
-        inputs = self._check_inputs() 
+        inputs = self._check_inputs()
         if extraopts: extraopts=self.extraopts
         else: extraopts=""
-            
+
         try:
             parser = PythonOptionsParser(optsfiles,extraopts,self.shell)
         except Exception, e:
@@ -432,10 +432,10 @@ class Gaudi(Francesc):
             raise ApplicationConfigurationError(None,msg)
 
         return GPIProxyObjectFactory(parser.get_input_data())
-   
+
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
-# Individual Gaudi applications. These are thin wrappers around the Gaudi base 
+# Individual Gaudi applications. These are thin wrappers around the Gaudi base
 # class. The appname property is read protected and it tries to guess all the
 # properties except the optsfile.
 
@@ -457,7 +457,7 @@ class ###CLASS###(Gaudi):
 
     def getenv(self,options=''):
         return super(###CLASS###,self).getenv()
-        
+
     def getpack(self,options=''):
         return super(###CLASS###,self).getpack(options)
 

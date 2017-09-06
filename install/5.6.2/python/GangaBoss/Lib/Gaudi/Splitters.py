@@ -11,7 +11,7 @@ from Ganga.GPIDev.Schema import *
 from Ganga.GPIDev.Lib.File import  File
 from Ganga.GPIDev.Lib.Job import Job
 from Ganga.GPIDev.Adapters.ISplitter import ISplitter, SplittingError
-from Ganga.Utility.util import unique 
+from Ganga.Utility.util import unique
 import Ganga.Utility.logging
 from GangaBoss.Lib.Gaudi.RTHUtils import *
 from GangaBoss.Lib.Dataset.DatasetUtils import *
@@ -37,7 +37,7 @@ def copy_app(app):
             c = copy.copy(getattr(app,name))
             setattr(cp_app,name,c)
     if not hasattr(app,'extra'): return cp_app
-    cp_app.extra = GaudiExtras() 
+    cp_app.extra = GaudiExtras()
     cp_app.extra.input_buffers = app.extra.input_buffers.copy()
     cp_app.extra.input_files = app.extra.input_files[:]
     cp_app.extra.outputsandbox = app.extra.outputsandbox[:]
@@ -48,13 +48,13 @@ def copy_app(app):
     cp_app.extra.metadata = app.extra.metadata.copy()
     cp_app.extra.run_ranges = app.extra.run_ranges[:]
     cp_app.extra.ana_file_nos = app.extra.ana_file_nos[:]
-    return cp_app 
+    return cp_app
 
 def create_gaudi_subjob(job, inputdata):
     j = Job()
     j.name = job.name
     j.application = copy_app(job.application)
-    j.backend = job.backend # no need to deepcopy 
+    j.backend = job.backend # no need to deepcopy
     if inputdata:
         j.inputdata = inputdata
         if hasattr(j.application,'extra'):
@@ -69,7 +69,7 @@ def create_gaudi_subjob(job, inputdata):
 
 def simple_split(files_per_job, inputs):
     """Just splits the files in the order they came"""
-    
+
     def create_subdataset(data_inputs,iter_begin,iter_end):
         dataset = BesDataset()
         dataset.depth = data_inputs.depth
@@ -79,23 +79,23 @@ def simple_split(files_per_job, inputs):
     result = []
     end = 0
     inputs_length = len(inputs.files)
-        
+
     for i in range(inputs_length // files_per_job):
         start = i * files_per_job
         end = start + files_per_job
         result.append(create_subdataset(inputs,start,end))
-            
+
     if end < (inputs_length):
         result.append(create_subdataset(inputs,end,None))
-            
+
     #catch file loss
     result_length = 0
     for r in result: result_length += len(r.files)
     if result_length != inputs_length:
         raise SplittingError('Data files lost during splitting, please send '\
                              'a bug report to the Ganga team.')
-        
-    return result    
+
+    return result
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
@@ -109,12 +109,12 @@ class SplitByFiles(ISplitter):
     docstr = 'Maximum number of files to use in a masterjob (-1 = all files)'
     _schema = Schema(Version(1,0),{
         'filesPerJob' : SimpleItem(defvalue=10,
-                                   doc='Number of files per subjob'),        
+                                   doc='Number of files per subjob'),
         'maxFiles' : SimpleItem(defvalue=-1, doc=docstr)})
 
     def _splitFiles(self,inputs):
         # don't let user use this if they're using the Dirac backend
-        job = None 
+        job = None
         try:
             job = self.getJobObject()
         except:
@@ -145,18 +145,18 @@ class SplitByFiles(ISplitter):
             inputs.files = inputdata.files[:self.maxFiles]
             logger.info("Only using a maximum of %d inputfiles"
                         % int(self.maxFiles))
-        
+
         datasetlist = self._splitFiles(inputs)
         for dataset in datasetlist:
             subjobs.append(create_gaudi_subjob(job,dataset))
-                
+
         return subjobs
-    
+
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 
 class OptionsFileSplitter(ISplitter):
     '''Split a jobs based on a list of option file fragments
-    
+
     This Splitter takes as argument a list of option file statements and will
     generate a job for each item in this list. The value of the indevidual list
     item will be appended to the master options file. A use case of this
@@ -168,7 +168,7 @@ class OptionsFileSplitter(ISplitter):
     _schema =Schema(Version(1,0),
                     {'optsArray': SimpleItem(defvalue=[],doc=docstr)})
 
-    def split(self,job):        
+    def split(self,job):
         subjobs=[]
         for i in self.optsArray:
             j = create_gaudi_subjob(job, job.inputdata)
@@ -181,7 +181,7 @@ class OptionsFileSplitter(ISplitter):
 class GenSplitter(ISplitter):
     """Create a set of Gauss jobs based on the total number of jobs and the
     number of events per subjob.
-    
+
     This Splitter will create a set of Gauss jobs using two parameters:
     'eventsPerJob' and 'numberOfJobs'. Each job uses a different random seed
     using the Gaudi options file statement 'GaussGen.FirstEventNumber' and will
@@ -206,7 +206,7 @@ class GenSplitter(ISplitter):
             j.application.extra.input_buffers['data.py'] += opts
             logger.debug("Creating job %d w/ FirstEventNumber = %d"%(i,first))
             subjobs.append(j)
-            
+
         return subjobs
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
@@ -215,9 +215,9 @@ class BossBaseSplitter(ISplitter):
     _name = "BossBaseSplitter"
     _schema = Schema(Version(1,0), {
             'evtMaxPerJob': SimpleItem(defvalue=50,doc='Number of events per job'),
-	    'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
-	    'seed': SimpleItem(defvalue=None,typelist=['int','type(None)'],doc='Random number seed'),
-	    'outputEvtNum': SimpleItem(defvalue='',doc='Output event number file'),
+            'evtTotal': SimpleItem(defvalue=100,doc='Total event number'),
+            'seed': SimpleItem(defvalue=None,typelist=['int','type(None)'],doc='Random number seed'),
+            'outputEvtNum': SimpleItem(defvalue='',doc='Output event number file'),
             })
 
     def split(self,job):
@@ -374,7 +374,7 @@ class BossOldSplitter(ISplitter):
         dbhost = config["dbhost"]
         shell = self._getShell()
         optsfiles = [fileitem.name for fileitem in job.application.optsfile]
-        parser = PythonOptionsParser(optsfiles,job.application.extraopts,shell) 
+        parser = PythonOptionsParser(optsfiles,job.application.extraopts,shell)
         runRangeBlocks = parser.get_run_range()
 
         evtMax = parser.get_EvtMax()
@@ -412,7 +412,7 @@ class BossOldSplitter(ISplitter):
             cursor.execute(sql)
             for row in cursor.fetchall():
                 logger.debug("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
-                #CN: check that lumi > 0 
+                #CN: check that lumi > 0
                 if row[1] > 0:
                     lumAll = lumAll + row[1]
 
@@ -437,13 +437,13 @@ class BossOldSplitter(ISplitter):
                          % (eventType, streamId, resonance, round, bossVer))
             fcdir = self._createFcDir(job, eventType, streamId, resonance, round, bossVer)
             for row in cursor.fetchall():
-                runId = row[0] 
-                #CN: check that lumi > 0 
+                runId = row[0]
+                #CN: check that lumi > 0
                 if row[1] > 0:
                     lum = row[1]
-                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer)
                     logger.debug("sql: %s" % sql)
-                    if cursor1.execute(sql): 
+                    if cursor1.execute(sql):
                         for rowE in cursor1.fetchall():
                             eventIdIni = rowE[0]
                             logger.debug("eventIdIni: %d" % eventIdIni)
@@ -452,7 +452,7 @@ class BossOldSplitter(ISplitter):
                     currentNum = (lum/lumAll)*evtMax
                     logger.debug("zhangxm log: currentNum %f, evtMax, %d\n" % (currentNum, evtMax))
                     i = 0
-                    if (currentNum-evtMaxPerJob) > 0 : 
+                    if (currentNum-evtMaxPerJob) > 0 :
                         ratio = currentNum/evtMaxPerJob
                         logger.debug("zhangxm log: ratio %f\n" % (ratio))
                         for i in range(1, int(ratio)+1):
@@ -464,7 +464,7 @@ class BossOldSplitter(ISplitter):
                     logger.debug("zhangxm log: i %d\n" % i)
                     eventId = eventIdIni+i*evtMaxPerJob
                     nextEventId = eventIdIni + currentNum
-                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+                    sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer)
                     if cursor1.execute(sql):
                         sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
                         logger.debug("sql: %s" % sql)
@@ -514,13 +514,13 @@ class BossOldSplitter(ISplitter):
         j.application.extra.input_buffers['data.py'] += opts
         j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + fileId
         j.application.outputfile = fcdir + "/" + fileId
-        j.application.runL = runId 
+        j.application.runL = runId
         #j.application.extra.outputdata.location = fcdir
         if j.application.recoptsfile:
            opts = 'from Gaudi.Configuration import * \n'
            opts += 'importOptions("recdata.opts")\n'
            sopts = 'EventCnvSvc.digiRootInputFile = {"%s"};\n' % fileId
-           recfileId = os.path.splitext(fileId)[0] + '.dst' 
+           recfileId = os.path.splitext(fileId)[0] + '.dst'
            sopts += 'EventCnvSvc.digiRootOutputFile = "%s";\n' % recfileId
            sopts += 'ApplicationMgr.EvtMax = %d;\n' % eventNum
            sopts += 'BesRndmGenSvc.RndmSeed = %d;\n' % rndmSeed
@@ -529,7 +529,7 @@ class BossOldSplitter(ISplitter):
            j.application.extra.input_buffers['recdata.py'] += opts
            j.application.extra.outputdata.files = "LFN:" + fcdir + "/" + recfileId
            j.application.outputfile = fcdir + "/" + recfileId
-        return j 
+        return j
 
     def _getShell(self):
         fd = tempfile.NamedTemporaryFile()
@@ -543,7 +543,7 @@ class BossOldSplitter(ISplitter):
         logger.debug("zhangxm log: run boss env script:\n%s" % script)
 
         shell = Shell(setup=fd.name)
-        return shell 
+        return shell
 
     def _getRoundNum(self, infoFile, runL, runH):
         f = open(infoFile, 'r')
@@ -556,12 +556,12 @@ class BossOldSplitter(ISplitter):
             items = data.split(',')
             file_runL = string.atoi(items[0])
             file_runH = string.atoi(items[1])
-                                     
+
             if runL >= file_runL and runH <= file_runH:
                 roundNum = string.lower(items[5])
 
         return roundNum
-        
+
     def _generateSQL(self, bossRelease, runFrom, runTo):
 
         dbhost = config["dbhost"]
@@ -629,7 +629,7 @@ class UserSplitterByRun(BossBaseSplitter):
             cursor.execute(sql)
             for row in cursor.fetchall():
                 logger.debug("zhangxm log: row[0] %d, row[1] %f\n" % (row[0], row[1]))
-                #CN: check that lumi > 0 
+                #CN: check that lumi > 0
                 if row[1] > 0:
                     lumAll = lumAll + row[1]
                     lums.append((row[0], row[1], sftVer))
@@ -677,9 +677,9 @@ class UserSplitterByRun(BossBaseSplitter):
     def _getEventId(self, cursor, runId, sftVer, currentNum):
         eventIdIni = 0
 
-        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer)
         logger.debug("sql: %s" % sql)
-        if cursor.execute(sql): 
+        if cursor.execute(sql):
             for rowE in cursor.fetchall():
                 eventIdIni = rowE[0]
                 logger.debug("eventIdIni: %d" % eventIdIni)
@@ -688,7 +688,7 @@ class UserSplitterByRun(BossBaseSplitter):
 
         nextEventId = eventIdIni + currentNum
 
-        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer) 
+        sql = 'select EventID from McNextEventID where RunID = %d && SftVer = "%s";' % (runId, sftVer)
         if cursor.execute(sql):
             sql = 'update McNextEventID set EventID = %d where RunID = %d && SftVer = "%s";' % (nextEventId, runId, sftVer)
             logger.debug("sql: %s" % sql)
@@ -805,7 +805,7 @@ class FakeSplitterByRun(BossBaseSplitter):
             sql, sftVer, parVer = self._generateSQL(guest_cursor, bossRelease, runRange[0], runRange[1])
             cursor.execute(sql)
             for row in cursor.fetchall():
-                #CN: check that lumi > 0 
+                #CN: check that lumi > 0
                 if row[1] > 0:
                     lumAll = lumAll + row[1]
                     lums.append((row[0], row[1], sftVer))

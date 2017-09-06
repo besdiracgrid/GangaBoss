@@ -54,7 +54,7 @@ echo "DatabaseSvc.SqliteDbPath = \\"/cvmfs/${bossRepo}/database\\";" >> ${prefix
 gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opts ${extraopts}
 (time boss.exe ${prefix}final.opts) 1> >(tail -c ${maxlogsize} > ${prefix}bosslog) 2> >(tail -c ${maxlogsize} > ${prefix}bosserr)
 result=$?
-if [ $result != 0 ]; then 
+if [ $result != 0 ]; then
    echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
    exit $result
 fi
@@ -792,7 +792,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._init_task(app)
         self._job_group(app)
 
-        sandbox = get_master_input_sandbox(app.getJobObject(),app.extra) 
+        sandbox = get_master_input_sandbox(app.getJobObject(),app.extra)
         c = StandardJobConfig('',sandbox,[],[],None)
         return c
 
@@ -829,7 +829,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         else:
             app.extra.input_buffers.pop('anadata.opts', None)
 
-        if app.extra.inputdata and app.extra.inputdata.hasLFNs():        
+        if app.extra.inputdata and app.extra.inputdata.hasLFNs():
             cat_opts = '\nFileCatalog().Catalogs = ' \
                        '["xmlcatalog_file:pool_xml_catalog.xml"]\n'
 #            app.extra.input_buffers['data.py'] += cat_opts
@@ -837,7 +837,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         script = self._create_boss_script(app)
         sandbox = get_input_sandbox(app.extra)
         app.extra.outputsandbox += ['script.log', 'script.err', 'rantrg.log', 'rantrg.err', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr', 'anabosslog', 'anabosserr']
-        outputsandbox = app.extra.outputsandbox 
+        outputsandbox = app.extra.outputsandbox
         c = StandardJobConfig(script,sandbox,[],outputsandbox,None)
 
         dirac_script = DiracScript()
@@ -849,7 +849,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         if app.extra.inputdata:
             dirac_script.inputdata = DiracInputData(app.extra.inputdata)
-          
+
         if app.extra.outputdata:
             dirac_script.outputdata = app.extra.outputdata
 
