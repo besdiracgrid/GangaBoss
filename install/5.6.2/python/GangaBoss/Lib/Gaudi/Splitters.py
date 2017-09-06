@@ -705,6 +705,8 @@ class UserSplitterByRun(BossBaseSplitter):
         br = bossRelease
         if bossRelease == '6.6.4.p02':
             br = '6.6.4.p01'
+        elif bossRelease == '7.0.2.p02':
+            br = '7.0.2.p01'
 
         # CN: get SftVer and ParVer for this run range
         sql = 'select SftVer, ParVer from CalVtxLumVer where BossRelease = "%s" and RunFrom <= %d and RunTo >= %d and DataType = "LumVtx";' % (br, runFrom, runTo)
