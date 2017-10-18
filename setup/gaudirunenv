@@ -1,2 +1,2 @@
-export PATH=/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/Gaudi/GAUDI_v23r9/scripts:$PATH
-export PYTHONPATH=/afs/.ihep.ac.cn/bes3/offline/ExternalLib/gangadist/Gaudi/GAUDI_v23r9/python:$PYTHONPATH
+export PATH=/cvmfs/dcomputing.ihep.ac.cn/frontend/gangadist/Gaudi/GAUDI_v23r9/scripts:$PATH
+export PYTHONPATH=/cvmfs/dcomputing.ihep.ac.cn/frontend/gangadist/Gaudi/GAUDI_v23r9/python:$PYTHONPATH
