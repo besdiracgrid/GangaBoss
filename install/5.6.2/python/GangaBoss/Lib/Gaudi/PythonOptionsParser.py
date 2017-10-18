@@ -16,15 +16,15 @@ logger = Ganga.Utility.logging.getLogger()
 
 class PythonOptionsParser:
     """ Parses job options file(s) w/ gaudirun.py to extract user's files"""
-    
-    def __init__( self, optsfiles, extraopts, shell):
+
+    def __init__(self, optsfiles, extraopts, shell):
         self.optsfiles = optsfiles
         self.extraopts = extraopts
         self.shell = shell
         self.opts_dict,self.opts_pkl_str = self._get_opts_dict_and_pkl_string()
         self.opts_str = self._get_opts_string()
 
-    def _get_opts_string( self):
+    def _get_opts_string(self):
         opts_string = ''
 
         tmp_opts = tempfile.NamedTemporaryFile(suffix = '.opts')
@@ -42,14 +42,14 @@ class PythonOptionsParser:
         tmp_opts.close()
         return opts_string
 
-    def _get_opts_dict_and_pkl_string( self):
+    def _get_opts_dict_and_pkl_string(self):
         '''Parse the options using gaudirun.py and create a dictionary of the
         configuration and pickle the options. The app handler will make a copy
         of the .pkl file for each job.'''
         tmp_pkl = tempfile.NamedTemporaryFile( suffix = '.pkl')
         tmp_py = tempfile.NamedTemporaryFile( suffix = '.py')
         py_opts = tempfile.NamedTemporaryFile( suffix = '.py')
-        py_opts.write( self._join_opts_files())
+        py_opts.write(self._join_opts_files())
         py_opts.flush()
 
         gaudirun = 'gaudirun.py -n -v -o %s %s' \
@@ -57,7 +57,7 @@ class PythonOptionsParser:
         opts_str = ''
         err_msg = ''
         options = {}
-        
+
         rc, stdout, m = self.shell.cmd1( gaudirun)
 
         if stdout.find('Gaudi.py') >= 0:
@@ -71,20 +71,20 @@ class PythonOptionsParser:
             #if stdout and rc == 0:
             #    opts_str = stdout
             #    err_msg = 'Please check gaudirun.py -c -v %s' % py_opts.name
-            #    err_msg += ' returns valid python syntax' 
-                    
-        elif stdout.find('no such option: -o') >= 0: 
+            #    err_msg += ' returns valid python syntax'
+
+        elif stdout.find('no such option: -o') >= 0:
             # old version of gaudirun.py
             gaudirun = 'gaudirun.py -n -v -p %s %s' \
                        % (tmp_pkl.name, py_opts.name)
             rc, stdout, m = self.shell.cmd1( gaudirun)
             rc = 0
-                      
+
             if stdout and rc == 0:
                 opts_str = stdout
                 err_msg = 'Please check %s -v %s' % (cmdbase,py_opts.name)
                 err_msg += ' returns valid python syntax'
-                
+
         else:
             # new version of gaudirun.py
             cmd = 'gaudirun.py -n -p %s %s' % (tmp_pkl.name, py_opts.name)
@@ -104,22 +104,22 @@ class PythonOptionsParser:
                 logger.error(' ', print_exc())
                 raise ApplicationConfigurationError(None,stdout)
             try:
-                opts_pkl_string = tmp_pkl.read()        
+                opts_pkl_string = tmp_pkl.read()
                 #logger.error("zhangxm log: opts_pkl_string:%s", opts_pkl_string)
             except IOError, e:
                 logger.error('Cannot read() the temporary pickle file: %s',
                              tmp_pkl.name)
-        
+
         if not rc ==0:
-            logger.debug('Failed to run: %s', gaudirun) 
+            logger.debug('Failed to run: %s', gaudirun)
             raise ApplicationConfigurationError(None,stdout)
-                                
+
         tmp_pkl.close()
         py_opts.close()
         tmp_py.close()
         return (options, opts_pkl_string)
-        
-    def _join_opts_files( self):
+
+    def _join_opts_files(self):
         '''Create a single options file from all supplied options.'''
         joined_py_opts = ''
         for name in self.optsfiles:
@@ -142,7 +142,7 @@ class PythonOptionsParser:
                 logger.error('%s',e)
                 logger.error('There was an IOError with the options file: %s',
                              name)
-                    
+
         if self.extraopts:
             logger.debug("zhangxm log: extraopts : %s", self.extraopts)
             joined_py_opts += self.extraopts
@@ -150,7 +150,7 @@ class PythonOptionsParser:
 
         return joined_py_opts
 
-    def get_run_range( self):
+    def get_run_range(self):
         '''Collects run range'''
         runs = []
         runRange = []
@@ -160,8 +160,8 @@ class PythonOptionsParser:
         except KeyError, e:
             logger.debug('No RunIdList has been defined in the options file.')
 
-        # CN: for each element in the list, check whether the next element is a 0. 
-        # if no, add just that run number to the run range 'tuple' 
+        # CN: for each element in the list, check whether the next element is a 0.
+        # if no, add just that run number to the run range 'tuple'
         # if yes, add that run number, the zero and the following one to the tuple
         # as a run range. then jump to the next element.
 
@@ -180,29 +180,29 @@ class PythonOptionsParser:
                 # last element in the list, so this is just a single run
                 runRange.append((abs(runs[i]), abs(runs[i])))
                 i = i+1
-            
+
 
         return runRange
 
-    def get_EvtMax( self):
+    def get_EvtMax(self):
         '''Get Max Event number and Max Event number Per File'''
         try:
             evtMax = self.opts_dict['ApplicationMgr']['EvtMax']
             #evtMaxPerJob = self.opts_dict['RealizationSvc']['EvtMaxPerJob']
         except KeyError, e:
-            logger.debug('No EvtMax and EvtMaxPerFile have been defined in the options file.') 
+            logger.debug('No EvtMax and EvtMaxPerFile have been defined in the options file.')
         return evtMax
 
-    def get_OutputFileName( self):
+    def get_OutputFileName(self):
         '''Get output File name'''
         try:
             outputFileName = self.opts_dict['RootCnvSvc']['digiRootOutputFile']
             #evtMaxPerJob = self.opts_dict['RealizationSvc']['EvtMaxPerJob']
         except KeyError, e:
             logger.debug('No digiRootOutputFile has been defined in the options file.')
-        return outputFileName 
+        return outputFileName
 
-    def get_input_data( self):
+    def get_input_data(self):
         '''Collects the user specified input data that the job will process'''
         data = []
         try:
@@ -212,21 +212,21 @@ class PythonOptionsParser:
 
         ds = BesDataset()
         for d in data:
-            #p1 = d.find('DATAFILE=') + len('DATAFILE=')    
+            #p1 = d.find('DATAFILE=') + len('DATAFILE=')
             #quote = d[p1]
             #p2 = d.find(quote,p1+1)
             #f = d[p1+1:p2]
             f = d
             file = strToDataFile(f)
-            if file is None: file = PhysicalFile(name=f)            
+            if file is None: file = PhysicalFile(name=f)
             ds.files.append(file)
             #dtype_str = d.replace('DATAFILE=%s%s%s' % (quote,f,quote),'')
             #dtype_str = dtype_str.strip()
         return ds
 
-    def get_output_files( self):        
+    def get_output_files(self):
         '''Collects and organizes filenames that the job outputs'''
-        
+
         sbtypes = Ganga.Utility.Config.getConfig('Boss')['outputsandbox_types']
         outsandbox = []
         outputdata = []
@@ -239,14 +239,14 @@ class PythonOptionsParser:
                   if sbtypes.count(type) > 0:
                      outsandbox.append(f)
                   else:
-                     outputdata.append(f) 
+                     outputdata.append(f)
 
         datatypes = ['NTupleSvc','EvtTupleSvc']
         for type in datatypes:
             if self.opts_dict.has_key(type):
                 if self.opts_dict[type].has_key('Output'):
                     tuples = self.opts_dict[type]['Output']
-                    # tuple output is returned as a list 
+                    # tuple output is returned as a list
                     for t in tuples:
                         f = t.split('\'')[1]
                         if sbtypes.count(type) > 0: outsandbox.append(f)
@@ -258,7 +258,7 @@ class PythonOptionsParser:
                  if sbtypes.count('HistogramPersistencySvc') > 0:
                      outsandbox.append(f)
                  else:
-                     outputdata.append(f)                
+                     outputdata.append(f)
 
         datatypes = ['MicroDSTStream','DstWriter','GaussTape','DigiWriter']
         for type in datatypes:
@@ -287,14 +287,14 @@ class PythonOptionsParser:
                 msg = 'User placed the file %s in both the outputsandbox and '
                 msg += 'outputdata. It will be removed from the sandbox.'
                 logger.warning(msg,f)
-        
+
         gaudi_outsandbox,gaudi_outputdata = self.get_output_files()
 
         # handle (as best we can) any user supplied wildcards
         datalist = [] # files in sandbox that match pattern in data
         for f in outputdata:
             datalist += fnmatch.filter(gaudi_outsandbox,f)
-            
+
         sandlist = [] # files in data that match sandbox pattern
         for f in outsandbox:
             sandlist += fnmatch.filter(gaudi_outputdata,f)
@@ -302,7 +302,7 @@ class PythonOptionsParser:
         datadatalist = [] # files in data that match patterns in data
         for f in outputdata:
             datadatalist += fnmatch.filter(gaudi_outputdata,f)
-            
+
         # files in sandbox which match patterns in data -> data
         for f in datalist:
             gaudi_outputdata.append(f)

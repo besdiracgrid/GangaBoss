@@ -24,6 +24,8 @@ dirac = Dirac()
 from DIRAC.Resources.Catalog.FileCatalogClient import FileCatalogClient
 fcc = FileCatalogClient('DataManagement/FileCatalog')
 
+from DIRAC.Core.Security.ProxyInfo                        import getProxyInfo
+
 import shutil
 import tarfile
 import hashlib
@@ -358,67 +360,22 @@ def setRantrgSEJobStatus():
         rantrgSe = 'unknown'
     setJobStatus('Random Trigger Downloaded from: %s' % rantrgSe)
 
-def uploadData(lfn, se):
-    removeData(lfn)
-
-    path = os.path.basename(lfn)
+def uploadData(lfn):
+    fn = os.path.basename(lfn)
+    path = os.path.join(os.getcwd(), fn)
     for i in range(0, 5):
-        result = dirac.addFile(lfn, path, se)
-        if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
+        result = cmd(['globus-url-copy', 'file:///%s'%path, 'gsiftp://storm.ihep.ac.cn:2811%s'%lfn])
+        if not result:
             break
         time.sleep(random.randint(60, 300))
-        print >>errFile, '- Upload to %s on SE %s failed, try again' % (lfn, se)
-    if result['OK']:
-        if result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
-            print >>logFile, 'Successfully uploading %s to %s. Retry %s' % (lfn, se, i+1)
-            return result
-        else:
-            print >>errFile, 'Failed type 2 uploading %s to %s. Retry %s' % (lfn, se, i+1)
-            return S_ERROR('Upload to %s on SE %s failed' % (lfn, se))
+        print >>errFile, '- Upload to %s failed, try again' % lfn
+    if not result:
+        print >>logFile, 'Successfully uploading %s. Retry %s' % (lfn, i+1)
     else:
-        print >>errFile, 'Failed type 1 uploading %s to %s. Retry %s' % (lfn, se, i+1)
-        return result
+        print >>errFile, 'Failed uploading %s. Retry %s' % (lfn, i+1)
+    return result == 0
 
-def removeData(lfn):
-    result = fcc.isFile(lfn)
-    if not (result['OK'] and lfn in result['Value']['Successful'] and result['Value']['Successful'][lfn]):
-        return result
-
-    for i in range(0, 16):
-        try:
-            result = fcc.removeFile(lfn)
-            if result['OK'] and result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
-                break
-        except Exception, e:
-            result = S_ERROR('Exception: %s' % str(e))
-            break
-        time.sleep(random.randint(6, 30))
-        print >>errFile, '- Remove %s failed, try again' % lfn
-    if result['OK']:
-        if result['Value']['Successful'] and result['Value']['Successful'].has_key(lfn):
-            print >>logFile, 'Successfully remove %s. Retry %s' % (lfn, i+1)
-            return result
-        else:
-            print >>errFile, 'Failed type 2 remove %s. Retry %s' % (lfn, i+1)
-            return S_ERROR('Remove %s failed' % lfn)
-    else:
-        print >>errFile, 'Failed type 1 remove %s. Retry %s' % (lfn, i+1)
-        return result
-
-def registerMetadata(lfn, metadata):
-    for i in range(0, 16):
-        result = fcc.setMetadata(lfn, metadata)
-        if result['OK']:
-            break
-        time.sleep(random.randint(6, 30))
-        print >>errFile, '- Register metadata for %s failed, try again' % lfn
-    if not result['OK']:
-        print >>errFile, 'Failed to register metadata for %s. Retry %s' % (lfn, i+1)
-        return S_ERROR('Register metadata for %s failed' % lfn)
-    print >>logFile, 'Successfully register metadata for %s. Retry %s' % (lfn, i+1)
-    return S_OK({lfn: metadata})
-
-def uploadLog(loglfn, se):
+def uploadLog(loglfn):
     path = os.path.basename(loglfn)
 
     logdir = 'log_' + jobID
@@ -441,12 +398,7 @@ def uploadLog(loglfn, se):
     tf.add(logdir)
     tf.close()
 
-    result = uploadData(loglfn, se)
-    if not result['OK']:
-        return result
-
-    metadata = {'jobId': jobID}
-    result = registerMetadata(loglfn, metadata)
+    result = uploadData(loglfn)
 
     return result
 
@@ -680,38 +632,15 @@ def bossjob():
         setJobStatus('Uploading Data')
         setJobInfo('Start Uploading Data')
         result = S_ERROR('No SE specified')
-        destSE = ''
-        for se in bossUploadSEs:
-            result = uploadData(lfn, se)
-            if result['OK']:
-                destSE = se
-                break
-        if not result['OK']:
+        result = uploadData(lfn)
+        if not result:
             print >>errFile, 'Upload Data Error:\\n%s' % result
             setJobStatus('Upload Data Error')
             setJobInfo('End Uploading Data with Error')
             setJobInfo('End Job with Error: %s' % 72)
             return 72
-        setJobStatus('Upload Data to %s successfully' % destSE)
-        setJobInfo('End Uploading Data to %s' % destSE)
-
-        setJobStatus('Setting Metadata')
-        setJobInfo('Start Setting Metadata')
-        metadata = {'jobId':       jobID,
-                    'eventNumber': eventNumber,
-                    'runL':        runL,
-                    'runH':        runH,
-                    'count':       1,
-                   }
-        result = registerMetadata(lfn, metadata)
-        if not result['OK']:
-            print >>errFile, 'Set Metadata Error:\\n%s' % result
-            setJobStatus('Setting Metadata Error')
-            setJobInfo('End Setting Metadata with Error')
-            removeData(lfn)
-            setJobInfo('End Job with Error: %s' % 73)
-            return 73
-        setJobInfo('End Set Metadata')
+        setJobStatus('Upload Data successfully')
+        setJobInfo('End Uploading Data')
 
     setJobStatus('Boss Job Finished Successfully')
     setJobInfo('End Job')
@@ -764,8 +693,8 @@ if __name__ == '__main__':
 
     # upload log and reg
     setJobStatus('Uploading Log')
-    result = uploadLog(loglfn, bossLogSE)
-    if not result['OK']:
+    result = uploadLog(loglfn)
+    if not result:
         setJobStatus('Upload Log Error')
 
     sys.exit(exitStatus)
@@ -783,6 +712,12 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._autoDownload = ''
 
     def master_prepare(self,app,appconfig):
+        username = getProxyInfo()['Value'].get('username')
+        if not username:
+            raise ApplicationConfigurationError(None, 'Cannot find username')
+        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/%s' % username, '/scratchfs/bes/%s' % username)
+        self._fullOutputDir = os.path.join(userLustreDir, app.output_dir.lstrip('/'))
+
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
         app.extra.master_input_buffers['rantrg_get.sh'] = rantrg_get_wrapper()
 
@@ -791,26 +726,13 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._create_patch_script(app)
         self._init_task(app)
         self._job_group(app)
+        self._make_output_dir(app)
 
         sandbox = get_master_input_sandbox(app.getJobObject(),app.extra)
         c = StandardJobConfig('',sandbox,[],[],None)
         return c
 
     def prepare(self,app,appconfig,appmasterconfig,jobmasterconfig):
-        if not app.extra.metadata['round'] in self._allRound:
-            bdr = BDRegister(app.extra.metadata)
-            dfcDir = bdr.createFileDir()
-            bdr.createLogDir()
-            app.add_output_dir(dfcDir)
-            if app.create_dataset:
-                dataset_name = bdr.createDataset()
-                app.add_dataset_name(dataset_name)
-            self._allRound.append(app.extra.metadata['round'])
-            taskInfo = {}
-            taskInfo['OutputDirectory'] = app.get_output_dir()
-            taskInfo['Dataset'] = app.get_dataset_name()
-            gDiracTask.updateTaskInfo(taskInfo)
-
         # some extra lines for simulation job options on DIRAC site
         opts = 'DatabaseSvc.DbType = "sqlite";\n'
         app.extra.input_buffers['data.opts'] += opts
@@ -993,14 +915,22 @@ class GaudiDiracRTHandler(IRuntimeHandler):
                 index += 1
         gDiracTask.setJobGroup(jobGroupTemp)
 
+    def _make_output_dir(self,app):
+        dirs = app.output_step[:]
+        dirs.append('log')
+        for d in dirs:
+            final_dir = os.path.join(self._fullOutputDir, d)
+            if not os.path.exists(final_dir):
+                os.makedirs(final_dir)
+
+
     def _create_boss_script(self,app):
         '''Creates the script that will set the Boss environment on grid'''
-        bdr = BDRegister(app.extra.metadata)
-        app.extra.outputdata.location = bdr.getFileDirName()
+        app.extra.outputdata.location = self._fullOutputDir
         lfns = []
         for output_file in app.extra.output_files:
             lfns.append(os.path.join(app.extra.outputdata.location, output_file))
-        loglfn = os.path.join(bdr.getLogDirName(), app.extra.output_name + '.log.tar.gz')
+        loglfn = os.path.join(self._fullOutputDir, 'log', app.extra.output_name + '.log.tar.gz')
         wrapper = boss_script_wrapper(app.version, lfns, loglfn, eval(getConfig('Boss')['DiracOutputDataSE'])[0],
                                       app.eventNumber, app.runL, app.runH, app.local_rantrg, self._autoDownload)
 

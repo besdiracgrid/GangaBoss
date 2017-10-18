@@ -107,6 +107,8 @@ class Gaudi(Francesc):
     schema['user_workarea'] = SimpleItem(defvalue='',doc=docstr)
     docstr = 'Use custom packages'
     schema['use_custom_package'] = SimpleItem(defvalue=False,doc=docstr)
+    docstr = 'Output directory'
+    schema['output_dir'] = SimpleItem(defvalue='GangaBoss',doc=docstr)
     docstr = 'Output root directory'
     schema['output_rootdir'] = SimpleItem(defvalue='',doc=docstr)
     docstr = 'Output data type'

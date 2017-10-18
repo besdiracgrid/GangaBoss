@@ -260,7 +260,7 @@ class BossBaseSplitter(ISplitter):
 
             for step in subjob.application.output_step:
                 if step in subjob.application.extra.data_type:
-                    subjob.application.extra.output_files.append(subjob.application.extra.output_name + '.' + subjob.application.extra.data_type[step])
+                    subjob.application.extra.output_files.append(step + '/' + subjob.application.extra.output_name + '.' + subjob.application.extra.data_type[step])
 
             subjobs.append(subjob)
             rndmSeed += 1
