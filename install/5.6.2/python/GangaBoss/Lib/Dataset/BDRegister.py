@@ -4,6 +4,7 @@ from LogicalFile import *
 from BesDataset import *
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 #from BESDIRAC.Badger.API.Badger import Badger
+from DIRAC import gConfig
 from DIRAC.Core.Security.ProxyInfo                        import getProxyInfo
 from DIRAC.ConfigurationSystem.Client.Helpers.Operations  import Operations
 from DIRAC.ConfigurationSystem.Client.Helpers.CSGlobals   import getVO
@@ -82,6 +83,39 @@ RecoToDST-07/90000000/DST" ,
     def getUnusedStream(self):
         '''get an unused stream ID'''
         return self.dfcOperation.getUnusedStream(self.metadata)
+
+    def getUnusedStream2(self, outputDir):
+        username = getProxyInfo()['Value'].get('username')
+        if not username:
+            raise ApplicationConfigurationError(None, 'Cannot find username')
+        commonPrefix = gConfig.getValue('/Resources/Applications/UserLustreDir/CommonPrefix', '/scratchfs/bes')
+        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/User/%s' % username, '%s/%s' % (commonPrefix, username))
+        fullOutputDir = os.path.join(userLustreDir, outputDir.lstrip('/'))
+
+        streamDirs = []
+        if os.path.isdir(fullOutputDir):
+            streamDirs = os.listdir(fullOutputDir)
+
+        streamIds = []
+        for streamDir in streamDirs:
+            if streamDir.startswith('stream'):
+                try:
+                    streamId = int(streamDir[6:])
+                except ValueError:
+                    pass
+                else:
+                    streamIds.append(streamId)
+
+        maxId = max(streamIds) if streamIds else 0
+        newId = 1
+        if maxId != 999:
+            newId = maxId + 1
+        else:
+            for id in range(1, 10000):
+                if not id in streamIds:
+                    newId = id
+                    break
+        return 'stream%03d' % newId
 
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 

@@ -57,26 +57,37 @@ gaudirun.py -n -v -o ${prefix}final.opts ${prefix}options.opts ${prefix}data.opt
 (time boss.exe ${prefix}final.opts) 1> >(tail -c ${maxlogsize} > ${prefix}bosslog) 2> >(tail -c ${maxlogsize} > ${prefix}bosserr)
 result=$?
 if [ $result != 0 ]; then
-   echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
-   exit $result
+    echo "ERROR: boss.exe ${prefix}final.opts failed with code $result" >&2
+    exit $result
 fi
 
 sync
 sleep 5
 
 if ! ( grep -q 'Application Manager Finalized successfully' ${prefix}bosslog && grep -q 'INFO Application Manager Terminated successfully' ${prefix}bosslog ); then
-   echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
-   exit 2
+    echo "ERROR: boss.exe ${prefix}final.opts does not finished successfully" >&2
+    exit 2
 fi
 """
 
 def rantrg_get_wrapper():
     return """#!/bin/bash
 
-runL=$1
-runH=$2
+dst=$(pwd)
 
-(time besdirac-dms-rantrg-get -r $runL -R $runH) 1>>rantrg.log 2>>rantrg.err
+for var in "$@"
+do
+    fn=$(basename $var)
+    echo "Downloading ${var}" >>rantrg.log
+    (time globus-url-copy $var file://$dst/$fn) 1>>rantrg.log 2>>rantrg.err
+    result=$?
+    if [ $result == 0 ]; then
+        echo "${var} downloaded successfully" >>rantrg.log
+    else
+        echo "ERROR: Download ${var} failed with code $result" >>rantrg.err
+        exit $result
+    fi
+done
 """
 
 def boss_script_wrapper(bossVer, lfns, loglfn, se, eventNumber, runL, runH, useLocalRantrg, autoDownload):
@@ -163,9 +174,7 @@ def getRantrgInfo():
             if roundEnd >= 0:
                 dateDir = roundNum[roundEnd:]
                 roundNum = roundNum[:roundEnd]
-                dateEnd = dateDir.find('/')
-                if dateEnd >= 0:
-                    dateDir = dateDir[:dateEnd]
+                dateDir = dateDir.strip('/')
 
         for line in result:
             filelist.append(line[2])
@@ -174,120 +183,164 @@ def getRantrgInfo():
 
 def getRantrgRoundInfo(roundNum):
     rantrgMethod = ''
-    rantrgRoundPaths = []
+    rantrgRootPath = []
 
-    configPrefix = '/Resources/Applications/LocalRantrg'
+    configPrefix = '/Resources/Applications/RandomTrigger/Local'
 
-    # check if local rantrg is enabled
-    rantrgEnabled = gConfig.getValue('%s/%s/Enabled'%(configPrefix, siteName), False)
-    if not rantrgEnabled:
-        print >>logFile, 'Local random trigger is not enabled for %s' % siteName
-        return rantrgMethod, rantrgRoundPaths
-
-    # search for available local random trigger data from the configuration server
-    rantrgAvailable = gConfig.getValue('%s/%s/Available'%(configPrefix, siteName), [])
-    if roundNum not in rantrgAvailable:
-        print >>logFile, 'Local random trigger file not found: Round %s not available in configuration' % roundNum
-        return rantrgMethod, rantrgRoundPaths
-
-    # find if this round is configured individually
     result = gConfig.getSections('%s/%s'%(configPrefix, siteName))
     if not result['OK']:
         print >>errFile, result['Message']
-        return rantrgMethod, rantrgRoundPaths
-    individualRounds = result['Value']
+        return rantrgMethod, rantrgRootPath
+    dataTypes = result['Value']
 
-    if roundNum in individualRounds:
-        rantrgMethod = gConfig.getValue('%s/%s/%s/Method'%(configPrefix, siteName, roundNum), '')
-        if rantrgMethod in ['New', 'Replace']:
-            rantrgRoundPaths = gConfig.getValue('%s/%s/%s/Paths'%(configPrefix, siteName, roundNum), [])
-    else:
-        rantrgMethod = gConfig.getValue('%s/%s/Method'%(configPrefix, siteName), '')
-        if rantrgMethod in ['New', 'Replace']:
-            rantrgMainPath = gConfig.getValue('%s/%s/Path'%(configPrefix, siteName), '')
-            if rantrgMainPath:
-                rantrgRoundPaths = [os.path.join(rantrgMainPath, roundNum)]
+    dataTypeFound = ''
+    for dt in dataTypes:
+        # check if local rantrg is enabled
+        rantrgEnabled = gConfig.getValue('%s/%s/%s/Enabled'%(configPrefix, siteName, dt), False)
+        if not rantrgEnabled:
+            continue
 
-    if rantrgMethod in ['New', 'Replace'] and not rantrgRoundPaths:
-        print >>errFile, 'Local random trigger file not found: Round %s path not found in configuration' % roundNum
+        rantrgAvailable = gConfig.getValue('%s/%s/%s/Available'%(configPrefix, siteName, dt), [])
+        if roundNum not in rantrgAvailable:
+            continue
 
-    return rantrgMethod, rantrgRoundPaths
+        dataTypeFound = dt
+        break
 
-def validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
+    if not dataTypeFound:
+        print >>errFile, 'Local random trigger round %s: not available in configuration' % roundNum
+
+    rantrgMethod = gConfig.getValue('%s/%s/%s/Method'%(configPrefix, siteName, dataTypeFound), '')
+    rantrgMethod = rantrgMethod.lower()
+    if rantrgMethod in ['new', 'replace']:
+        rantrgRootPath = gConfig.getValue('%s/%s/%s/Path'%(configPrefix, siteName, dataTypeFound), '')
+        if not rantrgRootPath:
+            print >>errFile, 'Local random trigger round %s: path not found in configuration' % roundNum
+
+    return rantrgMethod, rantrgRootPath
+
+def validateLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist):
     rantrgPath = ''
 
-    for rantrgRoundPath in rantrgRoundPaths:
-        if os.path.exists(os.path.join(rantrgRoundPath, filelist[0])):
-            rantrgPath = rantrgRoundPath
-            break
-        if dateDir and os.path.exists(os.path.join(rantrgRoundPath, dateDir, filelist[0])):
-            rantrgPath = os.path.join(rantrgRoundPath, dateDir)
-            break
+    testFilePath = os.path.join(rantrgRootPath, roundNum, filelist[0])
+    if os.path.exists(testFilePath):
+        rantrgPath = rantrgRootPath.rstrip('/')
 
     if not rantrgPath:
-        print >>errFile, 'Local random trigger file not in regular path: Try to find in %s' % rantrgRoundPaths
+        print >>errFile, 'Local random trigger file not found. Test file %s not found' % testFilePath
+        return ''
 
-        for rantrgRoundPath in rantrgRoundPaths:
-            for root,subdirs,files in os.walk(rantrgRoundPath):
-                if filelist[0] in files:
-                    rantrgPath = root
-                    break
-            if rantrgPath:
-                break
+    return os.path.join(rantrgPath, roundNum)
 
-    if not rantrgPath:
-        print >>errFile, 'Local random trigger file not found: Random trigger file not found anywhere'
-
-    return rantrgPath
-
-def validateReplaceLocalRantrgPath(rantrgRoundPaths, dateDir, filelist):
+def validateReplaceLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist):
     rantrgPath = ''
 
-    for rantrgRoundPath in rantrgRoundPaths:
-        if os.path.exists(os.path.join(rantrgRoundPath, filelist[0])):
-            rantrgPath = rantrgRoundPath
-            break
-        if dateDir and os.path.exists(os.path.join(rantrgRoundPath, dateDir, filelist[0])):
-            rantrgPath = rantrgRoundPath
-            break
+    testFilePath = os.path.join(rantrgRootPath, roundNum, dateDir, filelist[0])
+    if os.path.exists(testFilePath):
+        rantrgPath = rantrgRootPath.rstrip('/') + '/'
 
     if not rantrgPath:
-        print >>errFile, 'Local random trigger file not in regular path: Try to find in %s' % rantrgRoundPaths
-
-        for rantrgRoundPath in rantrgRoundPaths:
-            for root,subdirs,files in os.walk(rantrgRoundPath):
-                if filelist[0] in files:
-                    rantrgPath = rantrgRoundPath
-                    break
-            if rantrgPath:
-                break
-
-    if not rantrgPath:
-        print >>errFile, 'Local random trigger file not found: Random trigger file not found anywhere'
+        print >>errFile, 'Local random trigger file not found. Test file %s not found' % testFilePath
 
     return rantrgPath
 
 def getLocalRantrgPath():
     roundNum, dateDir, filelist = getRantrgInfo()
-    print 'roundNum: %s, dateDir: %s' % (roundNum, dateDir)
+    print 'roundNum: "%s", dateDir: "%s"' % (roundNum, dateDir)
     if not roundNum:
         print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
-        return ''
+        return '', ''
 
-    rantrgMethod, rantrgRoundPaths = getRantrgRoundInfo(roundNum)
-    print 'rantrgMethod: %s, rantrgRoundPaths: %s' % (rantrgMethod, rantrgRoundPaths)
+    rantrgMethod, rantrgRootPath = getRantrgRoundInfo(roundNum)
+    print 'rantrgMethod: %s, rantrgRootPath: %s' % (rantrgMethod, rantrgRootPath)
 
     rantrgPath = ''
-    if rantrgMethod == 'New':
-        rantrgPath = validateLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
-    elif rantrgMethod == 'Replace':
-        rantrgPath = validateReplaceLocalRantrgPath(rantrgRoundPaths, dateDir, filelist)
-        rantrgPath = rantrgPath[:rantrgPath.rfind('/')+1]
+    if rantrgMethod == 'new':
+        rantrgPath = validateLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist)
+    elif rantrgMethod == 'replace':
+        rantrgPath = validateReplaceLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist)
 
     if not rantrgPath:
         rantrgMethod = ''
 
     return rantrgMethod, rantrgPath
+
+
+def getRemoteRantrgPaths():
+    roundNum = ''
+    rantrgFilePaths = []
+
+    import sqlite3
+    sql3File = '/cvmfs/%s/database/offlinedb.db' % bossRepo
+    try:
+        conn = sqlite3.connect(sql3File)
+        c = conn.cursor()
+        c.execute("SELECT RunNo,FilePath,FileName FROM RanTrgData WHERE RunNo>=? AND RunNo<=?", (runL, runH))
+        resultSqlite = c.fetchall()
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        print >>errFile, 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
+        return roundNum, dateDir, filelist
+
+    if not resultSqlite:
+        return rantrgFilePaths
+
+    # parse round number and date from directory name
+    filePath = resultSqlite[0][1]
+    roundStart = filePath.rfind('round')
+    if roundStart >= 0:
+        roundNum = filePath[roundStart:]
+        roundEnd = roundNum.find('/')
+        if roundEnd >= 0:
+            roundNum = roundNum[:roundEnd]
+
+
+    configPrefix = '/Resources/Applications/RandomTrigger/Remote'
+
+    result = gConfig.getSections(configPrefix)
+    if not result['OK']:
+        print >>errFile, result['Message']
+        return rantrgFilePaths
+    dataTypes = result['Value']
+
+    dataTypeFound = ''
+    for dt in dataTypes:
+        rantrgAvailable = gConfig.getValue('%s/%s/Available'%(configPrefix, dt), [])
+        if roundNum not in rantrgAvailable:
+            continue
+
+        dataTypeFound = dt
+        break
+
+    if not dataTypeFound:
+        print >>errFile, 'Remote random trigger round %s: not found in configuration' % roundNum
+        return rantrgFilePaths
+
+    rantrgRootUrl = gConfig.getValue('%s/%s/Url'%(configPrefix, dataTypeFound), '')
+    if not rantrgRootUrl:
+        print >>errFile, 'Remote random trigger round %s: url not found in configuration' % roundNum
+        return rantrgFilePaths
+
+    rantrgFileStructure = gConfig.getValue('%s/%s/FileStructure'%(configPrefix, dataTypeFound), '')
+    rantrgFileStructure = rantrgFileStructure.lower()
+
+    for line in resultSqlite:
+        if rantrgFileStructure == 'plain':
+            rawFn = os.path.join(rantrgRootUrl, roundNum, line[2])
+        else:
+            roundStart = line[1].rfind('round')
+            if roundStart < 0:
+                print >>errFile, 'Remote random trigger path error: can not found round number in %s' % line[1]
+                return rantrgFilePaths
+            pathMiddle = line[1][roundStart:].rstrip('/')
+            rawFn = os.path.join(rantrgRootUrl, pathMiddle, line[2])
+
+        rantrgFilePaths.append(rawFn+'.idx')
+        rantrgFilePaths.append(rawFn)
+
+    return rantrgFilePaths
+
 
 def cmd(args):
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, args)
@@ -412,11 +465,11 @@ def enableWatchdog():
         shutil.rmtree('DISABLE_WATCHDOG_CPU_WALLCLOCK_CHECK', True)
         delDisableWatchdog = False
 
-def startRantrgDownload():
+def startRantrgDownload(remoteRantrgPaths):
     # download random trigger files
     setJobStatus('Downloading Random Trigger')
     disableWatchdog()
-    return Popen(['./rantrg_get.sh', str(runL), str(runH)], stdout=logFile, stderr=errFile)
+    return Popen(['./rantrg_get.sh']+remoteRantrgPaths, stdout=logFile, stderr=errFile)
 
 def startSimulation():
     setJobStatus('Simulation')
@@ -492,24 +545,28 @@ def bossjob():
             print >>logFile, 'rantrgMethod: %s' % rantrgMethod
             print >>logFile, 'localRantrgPath: %s' % localRantrgPath
 
-            if rantrgMethod == 'New':
+            if rantrgMethod == 'new':
                 print >>logFile, 'Use local random trigger path: %s' % localRantrgPath
                 cmd(['ls', '-ld', localRantrgPath])
                 generateLocalRantrgOpt(newPath=localRantrgPath)
-            elif rantrgMethod == 'Replace':
+            elif rantrgMethod == 'replace':
                 print >>logFile, 'Replace local random trigger path: %s' % localRantrgPath
+                cmd(['ls', '-ld', localRantrgPath])
                 generateLocalRantrgOpt(replacePath=localRantrgPath)
             elif rantrgMethod == 'Default':
                 print >>logFile, 'Use local random trigger with default path'
-                generateLocalRantrgOpt()
 
-        if not (rantrgMethod and localRantrgPath):
+        if not rantrgMethod:
             if runH != runL:
                 print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
                 setJobStatus('Can not do reconstruction on this site with split by event')
                 return 71
             setJobInfo('Start Downloading Random Trigger')
-            pdRantrg = startRantrgDownload()
+            remoteRantrgPaths = getRemoteRantrgPaths()
+            if not remoteRantrgPaths:
+                print >>errFile, 'No random trigger files found available'
+                return 66
+            pdRantrg = startRantrgDownload(remoteRantrgPaths)
 
     # run simulation
     setJobInfo('Start Simulation')
@@ -559,10 +616,10 @@ def bossjob():
                 if rantrgRetCode:
                     setJobStatus('Download Random Trigger Error: %s' % rantrgRetCode)
                     setJobInfo('End Download Random Trigger with Error')
-                    retCode = rantrgRetCode
+                    retCode = 65
                     break
                 else:
-                    setRantrgSEJobStatus()
+#                    setRantrgSEJobStatus()
 #                    setJobStatus('Download Random Trigger Successfully')
                     setJobInfo('End Downloading Random Trigger')
                     if simRunning:
@@ -715,8 +772,9 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         username = getProxyInfo()['Value'].get('username')
         if not username:
             raise ApplicationConfigurationError(None, 'Cannot find username')
-        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/%s' % username, '/scratchfs/bes/%s' % username)
-        self._fullOutputDir = os.path.join(userLustreDir, app.output_dir.lstrip('/'))
+        commonPrefix = gConfig.getValue('/Resources/Applications/UserLustreDir/CommonPrefix', '/scratchfs/bes')
+        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/User/%s' % username, '%s/%s' % (commonPrefix, username))
+        self._fullOutputDir = os.path.join(userLustreDir, app.output_dir.lstrip('/'), app.extra.metadata['streamId'])
 
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
         app.extra.master_input_buffers['rantrg_get.sh'] = rantrg_get_wrapper()
@@ -887,6 +945,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         taskInfo = {}
         taskInfo['SE'] = eval(getConfig('Boss')['DiracOutputDataSE'])[0]
+        taskInfo['OutputDirectory'] = self._fullOutputDir
         gDiracTask.updateTaskInfo(taskInfo)
 
         gDiracTask.setTaskName(taskName)

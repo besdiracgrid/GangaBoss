@@ -314,7 +314,7 @@ class Gaudi(Francesc):
         # automatically get the stream ID
         if not self.extra.metadata.has_key('streamId'):
             bdr = BDRegister(self.extra.metadata)
-            self.extra.metadata['streamId'] = bdr.getUnusedStream()
+            self.extra.metadata['streamId'] = bdr.getUnusedStream2(self.output_dir)
 
         # the joboption and decay card
         if self.optsfile:
@@ -358,7 +358,7 @@ class Gaudi(Francesc):
         taskInfo['DecayCard'] = self._decaycard
 
         taskInfo['Dataset'] = []
-        taskInfo['OutputDirectory'] = []
+#        taskInfo['OutputDirectory'] = []
 
         gDiracTask.updateTaskInfo(taskInfo)
 
