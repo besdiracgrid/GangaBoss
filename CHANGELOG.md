@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.1.2 (2017-10-25)
+-------------------
+
+### New Feature
+- Upload user output to local lustre
+
 v1.1.1 (2017-09-06)
 -------------------
 
