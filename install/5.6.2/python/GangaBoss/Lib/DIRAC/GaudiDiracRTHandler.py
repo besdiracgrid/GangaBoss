@@ -775,6 +775,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         commonPrefix = gConfig.getValue('/Resources/Applications/UserLustreDir/CommonPrefix', '/scratchfs/bes')
         userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/User/%s' % username, '%s/%s' % (commonPrefix, username))
         self._fullOutputDir = os.path.join(userLustreDir, app.output_dir.lstrip('/'), app.extra.metadata['streamId'])
+        app.add_output_dir(self._fullOutputDir)
 
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()
         app.extra.master_input_buffers['rantrg_get.sh'] = rantrg_get_wrapper()
