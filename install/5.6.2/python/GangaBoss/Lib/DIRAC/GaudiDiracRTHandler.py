@@ -74,19 +74,43 @@ def rantrg_get_wrapper():
     return """#!/bin/bash
 
 dst=$(pwd)
+max_retry=5
+max_wait=300
+
+download() {
+    v=$1
+
+    for (( i=1; i <= $max_retry; ++i ))
+    do
+        fn=$(basename $v)
+        echo "---- Start at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')" >>rantrg.err
+        (time globus-url-copy ${v} file://$dst/$fn) 1>>rantrg.log 2>>rantrg.err
+        result=$?
+        echo "---- Finish at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')" >>rantrg.err
+        if [ $result == 0 ]; then
+            break
+        fi
+        echo "---- Download (${i}) failed and wait for retry" >>rantrg.err
+        sleep $((RANDOM % max_wait))
+    done
+
+    if [ $result == 0 ]; then
+        echo "${v} downloaded successfully with ${i} attempt" >>rantrg.log
+    else
+        echo "ERROR: Download ${v} failed with code $result" >>rantrg.err
+        exit $result
+    fi
+}
 
 for var in "$@"
 do
-    fn=$(basename $var)
+    echo '================================================================================' >>rantrg.log
+    echo '================================================================================' >>rantrg.err
     echo "Downloading ${var}" >>rantrg.log
-    (time globus-url-copy $var file://$dst/$fn) 1>>rantrg.log 2>>rantrg.err
-    result=$?
-    if [ $result == 0 ]; then
-        echo "${var} downloaded successfully" >>rantrg.log
-    else
-        echo "ERROR: Download ${var} failed with code $result" >>rantrg.err
-        exit $result
-    fi
+    echo "Downloading ${var}" >>rantrg.err
+    download $var
+    echo '' >>rantrg.log
+    echo '' >>rantrg.err
 done
 """
 
