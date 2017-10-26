@@ -75,6 +75,7 @@ def rantrg_get_wrapper():
 
 dst=$(pwd)
 max_retry=5
+min_wait=60
 max_wait=300
 
 download() {
@@ -91,7 +92,7 @@ download() {
             break
         fi
         echo "---- Download (${i}) failed and wait for retry" >>rantrg.err
-        sleep $((RANDOM % max_wait))
+        sleep $((min_wait + RANDOM % (max_wait-min_wait)))
     done
 
     if [ $result == 0 ]; then
