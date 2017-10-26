@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.2.2 (2017-10-26)
+-------------------
+
+### New Feature
+- Add retry for downloading random trigger files
+
 v1.2.1 (2017-10-25)
 -------------------
 
