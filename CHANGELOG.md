@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.2.3 (2017-10-31)
+-------------------
+
+### Change
+- Reduce random trigger download retries with "globus-url-copy -sync"
+
 v1.2.2 (2017-10-26)
 -------------------
 
