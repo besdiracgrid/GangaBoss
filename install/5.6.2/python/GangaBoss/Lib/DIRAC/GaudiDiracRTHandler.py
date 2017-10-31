@@ -84,34 +84,42 @@ download() {
     for (( i=1; i <= $max_retry; ++i ))
     do
         fn=$(basename $v)
-        echo "---- Start at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')" >>rantrg.err
-        (time globus-url-copy ${v} file://$dst/$fn) 1>>rantrg.log 2>>rantrg.err
+        echo "---- Start at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')"
+        (time globus-url-copy -sync ${v} file://$dst/$fn)
         result=$?
-        echo "---- Finish at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')" >>rantrg.err
-        if [ $result == 0 ]; then
+        echo "---- Finish at $(date -u '+%Y-%m-%d %H:%M:%S.%N %Z')"
+        if [ $result = 0 ]; then
             break
         fi
-        echo "---- Download (${i}) failed and wait for retry" >>rantrg.err
+
+        echo "---- Download (${i}) failed with exit code ${result}"
+        echo ''
+
+        if [ $i -ge $max_retry ]; then
+            break
+        fi
+
+        echo "Wait for retry"
         sleep $((min_wait + RANDOM % (max_wait-min_wait)))
     done
 
-    if [ $result == 0 ]; then
-        echo "${v} downloaded successfully with ${i} attempt" >>rantrg.log
+    if [ $result = 0 ]; then
+        echo "${v} downloaded successfully with ${i} attempt"
     else
-        echo "ERROR: Download ${v} failed with code $result" >>rantrg.err
-        exit $result
+        echo "ERROR: Download ${v} failed with code $result"
     fi
 }
 
 for var in "$@"
 do
     echo '================================================================================' >>rantrg.log
-    echo '================================================================================' >>rantrg.err
     echo "Downloading ${var}" >>rantrg.log
-    echo "Downloading ${var}" >>rantrg.err
-    download $var
+    download $var >>rantrg.log 2>&1
+    result=$?
     echo '' >>rantrg.log
-    echo '' >>rantrg.err
+    if [ $result != 0 ]; then
+        exit $result
+    fi
 done
 """
 
@@ -119,7 +127,7 @@ def boss_script_wrapper(bossVer, lfns, loglfn, se, eventNumber, runL, runH, useL
     script_head = """#!/usr/bin/env python
 
 import os, sys, shutil, re, time, datetime, random, socket, tarfile
-from subprocess import Popen, call
+from subprocess import Popen, call, STDOUT
 
 import DIRAC
 from DIRAC import S_OK, S_ERROR, gConfig
@@ -143,7 +151,6 @@ doAnalysis = os.path.exists('anaoptions.opts')
 delDisableWatchdog = False
 
 logFile = open('script.log', 'w')
-errFile = open('script.err', 'w')
 
 jobID = os.environ.get('DIRACJOBID', '0')
 siteName = DIRAC.siteName()
@@ -186,7 +193,7 @@ def getRantrgInfo():
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        print >>errFile, 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
+        print 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
         return roundNum, dateDir, filelist
 
     if result:
@@ -214,7 +221,7 @@ def getRantrgRoundInfo(roundNum):
 
     result = gConfig.getSections('%s/%s'%(configPrefix, siteName))
     if not result['OK']:
-        print >>errFile, result['Message']
+        print result['Message']
         return rantrgMethod, rantrgRootPath
     dataTypes = result['Value']
 
@@ -233,14 +240,14 @@ def getRantrgRoundInfo(roundNum):
         break
 
     if not dataTypeFound:
-        print >>errFile, 'Local random trigger round %s: not available in configuration' % roundNum
+        print 'Local random trigger round %s: not available in configuration' % roundNum
 
     rantrgMethod = gConfig.getValue('%s/%s/%s/Method'%(configPrefix, siteName, dataTypeFound), '')
     rantrgMethod = rantrgMethod.lower()
     if rantrgMethod in ['new', 'replace']:
         rantrgRootPath = gConfig.getValue('%s/%s/%s/Path'%(configPrefix, siteName, dataTypeFound), '')
         if not rantrgRootPath:
-            print >>errFile, 'Local random trigger round %s: path not found in configuration' % roundNum
+            print 'Local random trigger round %s: path not found in configuration' % roundNum
 
     return rantrgMethod, rantrgRootPath
 
@@ -252,7 +259,7 @@ def validateLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist):
         rantrgPath = rantrgRootPath.rstrip('/')
 
     if not rantrgPath:
-        print >>errFile, 'Local random trigger file not found. Test file %s not found' % testFilePath
+        print 'Local random trigger file not found. Test file %s not found' % testFilePath
         return ''
 
     return os.path.join(rantrgPath, roundNum)
@@ -265,7 +272,7 @@ def validateReplaceLocalRantrgPath(rantrgRootPath, roundNum, dateDir, filelist):
         rantrgPath = rantrgRootPath.rstrip('/') + '/'
 
     if not rantrgPath:
-        print >>errFile, 'Local random trigger file not found. Test file %s not found' % testFilePath
+        print 'Local random trigger file not found. Test file %s not found' % testFilePath
 
     return rantrgPath
 
@@ -273,7 +280,7 @@ def getLocalRantrgPath():
     roundNum, dateDir, filelist = getRantrgInfo()
     print 'roundNum: "%s", dateDir: "%s"' % (roundNum, dateDir)
     if not roundNum:
-        print >>errFile, 'Local random trigger file not found: Run %s not in the database' % runL
+        print 'Local random trigger file not found: Run %s not in the database' % runL
         return '', ''
 
     rantrgMethod, rantrgRootPath = getRantrgRoundInfo(roundNum)
@@ -305,7 +312,7 @@ def getRemoteRantrgPaths():
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        print >>errFile, 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
+        print 'Open sqlite3 file "%s" error: %s' % (sql3File, e)
         return roundNum, dateDir, filelist
 
     if not resultSqlite:
@@ -325,7 +332,7 @@ def getRemoteRantrgPaths():
 
     result = gConfig.getSections(configPrefix)
     if not result['OK']:
-        print >>errFile, result['Message']
+        print result['Message']
         return rantrgFilePaths
     dataTypes = result['Value']
 
@@ -339,12 +346,12 @@ def getRemoteRantrgPaths():
         break
 
     if not dataTypeFound:
-        print >>errFile, 'Remote random trigger round %s: not found in configuration' % roundNum
+        print 'Remote random trigger round %s: not found in configuration' % roundNum
         return rantrgFilePaths
 
     rantrgRootUrl = gConfig.getValue('%s/%s/Url'%(configPrefix, dataTypeFound), '')
     if not rantrgRootUrl:
-        print >>errFile, 'Remote random trigger round %s: url not found in configuration' % roundNum
+        print 'Remote random trigger round %s: url not found in configuration' % roundNum
         return rantrgFilePaths
 
     rantrgFileStructure = gConfig.getValue('%s/%s/FileStructure'%(configPrefix, dataTypeFound), '')
@@ -356,7 +363,7 @@ def getRemoteRantrgPaths():
         else:
             roundStart = line[1].rfind('round')
             if roundStart < 0:
-                print >>errFile, 'Remote random trigger path error: can not found round number in %s' % line[1]
+                print 'Remote random trigger path error: can not found round number in %s' % line[1]
                 return rantrgFilePaths
             pathMiddle = line[1][roundStart:].rstrip('/')
             rawFn = os.path.join(rantrgRootUrl, pathMiddle, line[2])
@@ -370,21 +377,17 @@ def getRemoteRantrgPaths():
 def cmd(args):
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, args)
     print >>logFile, startcmd
-    print >>errFile, startcmd
     logFile.flush()
-    errFile.flush()
 
     result = -1
     try:
-        result = call(args, stdout=logFile, stderr=errFile)
+        result = call(args, stdout=logFile, stderr=STDOUT)
     except Exception as e:
-        print >>errFile, 'Run command failed: %s' % e
+        print 'Run command failed: %s' % e
 
     endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, args, '='*80)
     print >>logFile, endcmd
-    print >>errFile, endcmd
     logFile.flush()
-    errFile.flush()
     return result
 
 def cp(src, dst):
@@ -395,10 +398,10 @@ def launchInputDownload():
     if not autoDownload:
         return True
 
-    print >>logFile, 'Downloading auto uploaded file %s ...' % autoDownload
+    print 'Downloading auto uploaded file %s ...' % autoDownload
     result = dirac.getFile(autoDownload)
     if not (result['OK'] and result['Value']['Successful']):
-        print >>errFile, 'Auto uploaded files download failed: %s' % autoDownload
+        print 'Auto uploaded files download failed: %s' % autoDownload
         return False
 
     tf = tarfile.open(os.path.basename(autoDownload))
@@ -418,14 +421,14 @@ def setJobInfo(message):
         info = RPCClient( 'Info/BadgerInfo' )
         result = info.addJobLog( int(jobID), siteName, hostname, eventNumber, message )
         if not result['OK']:
-            print >>errFile, 'setJobInfo error: %s' % result
+            print 'setJobInfo error: %s' % result
 
 def setJobStatus(message):
     if jobID != '0':
         jobReport = JobReport(int(jobID), 'BossScript')
         result = jobReport.setApplicationStatus(message)
         if not result['OK']:
-            print >>errFile, 'setJobStatus error: %s' % result
+            print 'setJobStatus error: %s' % result
 
 def setRantrgSEJobStatus():
     rantrgLogFile = open('rantrg.log')
@@ -446,11 +449,11 @@ def uploadData(lfn):
         if not result:
             break
         time.sleep(random.randint(60, 300))
-        print >>errFile, '- Upload to %s failed, try again' % lfn
+        print '- Upload to %s failed, try again' % lfn
     if not result:
-        print >>logFile, 'Successfully uploading %s. Retry %s' % (lfn, i+1)
+        print 'Successfully uploading %s. Retry %s' % (lfn, i+1)
     else:
-        print >>errFile, 'Failed uploading %s. Retry %s' % (lfn, i+1)
+        print 'Failed uploading %s. Retry %s' % (lfn, i+1)
     return result == 0
 
 def uploadLog(loglfn):
@@ -466,9 +469,7 @@ def uploadLog(loglfn):
     cp('anabosslog', logdir)
     cp('anabosserr', logdir)
     cp('script.log', logdir)
-    cp('script.err', logdir)
     cp('rantrg.log', logdir)
-    cp('rantrg.err', logdir)
 
     # tar path logdir
     tgzfile = path
@@ -494,25 +495,21 @@ def startRantrgDownload(remoteRantrgPaths):
     # download random trigger files
     setJobStatus('Downloading Random Trigger')
     disableWatchdog()
-    return Popen(['./rantrg_get.sh']+remoteRantrgPaths, stdout=logFile, stderr=errFile)
+    return Popen(['./rantrg_get.sh']+remoteRantrgPaths, stdout=logFile, stderr=STDOUT)
 
 def startSimulation():
     setJobStatus('Simulation')
 
     startcmd = '%s\\n%s  Start Executing: %s' % ('='*80, '>'*16, ['./boss_run.sh', bossRepo, bossVer])
     print >>logFile, startcmd
-    print >>errFile, startcmd
     logFile.flush()
-    errFile.flush()
 
-    return Popen(['./boss_run.sh', bossRepo, bossVer], stdout=logFile, stderr=errFile)
+    return Popen(['./boss_run.sh', bossRepo, bossVer], stdout=logFile, stderr=STDOUT)
 
 def endSimulation():
     endcmd = '%s  End Executing: %s\\n%s\\n' % ('<'*16, ['./boss_run.sh', bossRepo, bossVer], '='*80)
     print >>logFile, endcmd
-    print >>errFile, endcmd
     logFile.flush()
-    errFile.flush()
 
 #    setJobStatus('Simulation Finished')
 
@@ -531,7 +528,7 @@ def checkRepo(repo):
     try:
         os.listdir(repoDir)
     except OSError as e:
-        print >>errFile, 'List directory "%s" failed: %s' % (repoDir, e)
+        print 'List directory "%s" failed: %s' % (repoDir, e)
 
     if not os.path.isdir(repoDir):
         return False
@@ -583,13 +580,13 @@ def bossjob():
 
         if not rantrgMethod:
             if runH != runL:
-                print >>errFile, 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
+                print 'Too many runs to download random trigger file. %s - %s' % (runL, runH)
                 setJobStatus('Can not do reconstruction on this site with split by event')
                 return 71
             setJobInfo('Start Downloading Random Trigger')
             remoteRantrgPaths = getRemoteRantrgPaths()
             if not remoteRantrgPaths:
-                print >>errFile, 'No random trigger files found available'
+                print 'No random trigger files found available'
                 return 66
             pdRantrg = startRantrgDownload(remoteRantrgPaths)
 
@@ -716,7 +713,7 @@ def bossjob():
         result = S_ERROR('No SE specified')
         result = uploadData(lfn)
         if not result:
-            print >>errFile, 'Upload Data Error:\\n%s' % result
+            print 'Upload Data Error:\\n%s' % result
             setJobStatus('Upload Data Error')
             setJobInfo('End Uploading Data with Error')
             setJobInfo('End Job with Error: %s' % 72)
@@ -731,7 +728,7 @@ def bossjob():
 
 if __name__ == '__main__':
     sys.stdout = logFile
-    sys.stderr = errFile
+    sys.stderr = logFile
 
     # file executable
     os.chmod('boss_run.sh', 0755)
@@ -743,6 +740,9 @@ if __name__ == '__main__':
     cmd(['ip', 'addr'])
     cmd(['/sbin/ifconfig'])
     cmd(['lsb_release', '-a'])
+    cmd(['df', '-hT'])
+    cmd(['pwd'])
+    cmd(['df', '-T', '.'])
     cmd(['ls', '-ltrA'])
 
     # auto download
@@ -771,6 +771,7 @@ if __name__ == '__main__':
 
     # some ending job
     cmd(['ls', '-ltrA'])
+    cmd(['df', '-T', '.'])
     cmd(['date'])
 
     # upload log and reg
@@ -842,7 +843,7 @@ class GaudiDiracRTHandler(IRuntimeHandler):
 
         script = self._create_boss_script(app)
         sandbox = get_input_sandbox(app.extra)
-        app.extra.outputsandbox += ['script.log', 'script.err', 'rantrg.log', 'rantrg.err', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr', 'anabosslog', 'anabosserr']
+        app.extra.outputsandbox += ['script.log', 'rantrg.log', 'bosslog', 'bosserr', 'recbosslog', 'recbosserr', 'anabosslog', 'anabosserr']
         outputsandbox = app.extra.outputsandbox
         c = StandardJobConfig(script,sandbox,[],outputsandbox,None)
 
