@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.2.4 (2017-11-03)
+-------------------
+
+### Change
+- OutputDir could be absolute path
+
 v1.2.3 (2017-10-31)
 -------------------
 
