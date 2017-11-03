@@ -441,14 +441,16 @@ def setRantrgSEJobStatus():
         rantrgSe = 'unknown'
     setJobStatus('Random Trigger Downloaded from: %s' % rantrgSe)
 
-def uploadData(lfn):
+def uploadData(lfn, maxRetry=5, minWait=0, maxWait=60):
     fn = os.path.basename(lfn)
     path = os.path.join(os.getcwd(), fn)
-    for i in range(0, 5):
+    for i in range(maxRetry):
         result = cmd(['globus-url-copy', 'file:///%s'%path, 'gsiftp://storm.ihep.ac.cn:2811%s'%lfn])
         if not result:
             break
-        time.sleep(random.randint(60, 300))
+        if i+1 >= maxRetry:
+            break
+        time.sleep(random.randint(minWait, maxWait))
         print '- Upload to %s failed, try again' % lfn
     if not result:
         print 'Successfully uploading %s. Retry %s' % (lfn, i+1)
@@ -477,7 +479,7 @@ def uploadLog(loglfn):
     tf.add(logdir)
     tf.close()
 
-    result = uploadData(loglfn)
+    result = uploadData(loglfn, maxRetry=1)
 
     return result
 
@@ -711,7 +713,7 @@ def bossjob():
         setJobStatus('Uploading Data')
         setJobInfo('Start Uploading Data')
         result = S_ERROR('No SE specified')
-        result = uploadData(lfn)
+        result = uploadData(lfn, maxRetry=5, minWait=60, maxWait=300)
         if not result:
             print 'Upload Data Error:\\n%s' % result
             setJobStatus('Upload Data Error')
@@ -795,12 +797,10 @@ class GaudiDiracRTHandler(IRuntimeHandler):
         self._autoDownload = ''
 
     def master_prepare(self,app,appconfig):
-        username = getProxyInfo()['Value'].get('username')
-        if not username:
-            raise ApplicationConfigurationError(None, 'Cannot find username')
-        commonPrefix = gConfig.getValue('/Resources/Applications/UserLustreDir/CommonPrefix', '/scratchfs/bes')
-        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/User/%s' % username, '%s/%s' % (commonPrefix, username))
-        self._fullOutputDir = os.path.join(userLustreDir, app.output_dir.lstrip('/'), app.extra.metadata['streamId'])
+        bdr = BDRegister(app.extra.metadata)
+        self._fullOutputDir = bdr.getFullOutputDir(app.output_dir)
+        if 'streamId' in app.extra.metadata and app.extra.metadata['streamId']:
+            self._fullOutputDir = os.path.join(self._fullOutputDir, app.extra.metadata['streamId'])
         app.add_output_dir(self._fullOutputDir)
 
         app.extra.master_input_buffers['boss_run.sh'] = boss_run_wrapper()

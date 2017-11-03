@@ -1,5 +1,6 @@
 #\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
 from Ganga.GPIDev.Base import GangaObject
+from Ganga.Core import ApplicationConfigurationError
 from LogicalFile import *
 from BesDataset import *
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
@@ -21,8 +22,8 @@ class BDRegister(GangaObject):
     dqflag = "All" ,
     path = "/Boss/Collision09/Beam450GeV-VeloOpen-MagDown/Real Data + \
 RecoToDST-07/90000000/DST" ,
-    type = "Path" 
-    ) 
+    type = "Path"
+    )
 
     '''
     schema = {}
@@ -84,13 +85,23 @@ RecoToDST-07/90000000/DST" ,
         '''get an unused stream ID'''
         return self.dfcOperation.getUnusedStream(self.metadata)
 
+    def getFullOutputDir(self, outputDir):
+        if outputDir.startswith('/'):
+            availablePrefix = gConfig.getValue('/Resources/Applications/IHEPLustreDir/AvailablePrefix', [])
+            for ap in availablePrefix:
+                if outputDir.startswith(ap):
+                    return outputDir
+            raise ApplicationConfigurationError(None, 'Lustre directory not available for DIRAC jobs: %s' % outputDir)
+        else:
+            username = getProxyInfo()['Value'].get('username')
+            if not username:
+                raise ApplicationConfigurationError(None, 'Cannot find username')
+            commonPrefix = gConfig.getValue('/Resources/Applications/IHEPLustreDir/DefaultPrefix', '/scratchfs/bes')
+            userLustreDir = gConfig.getValue('/Resources/Applications/IHEPLustreDir/UserDefaultDir/%s' % username, '%s/%s' % (commonPrefix, username))
+            return os.path.join(userLustreDir, outputDir)
+
     def getUnusedStream2(self, outputDir):
-        username = getProxyInfo()['Value'].get('username')
-        if not username:
-            raise ApplicationConfigurationError(None, 'Cannot find username')
-        commonPrefix = gConfig.getValue('/Resources/Applications/UserLustreDir/CommonPrefix', '/scratchfs/bes')
-        userLustreDir = gConfig.getValue('/Resources/Applications/UserLustreDir/User/%s' % username, '%s/%s' % (commonPrefix, username))
-        fullOutputDir = os.path.join(userLustreDir, outputDir.lstrip('/'))
+        fullOutputDir = self.getFullOutputDir(outputDir)
 
         streamDirs = []
         if os.path.isdir(fullOutputDir):
@@ -172,7 +183,7 @@ class DfcOperation:
         basePath = '/' + vo + '/' + user_prefix + '/' + initial + '/' + username
 
         return basePath
-        
+
     def isDirExists(self,dir):
         '''check whether dir on DFC exists'''
         result = self.client.listDirectory(dir)

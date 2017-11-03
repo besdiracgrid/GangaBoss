@@ -95,6 +95,8 @@ class Gaudi(Francesc):
     schema['long_idle'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Create dataset'
     schema['create_dataset'] = SimpleItem(defvalue=True,doc=docstr)
+    docstr = 'Auto add stream number'
+    schema['auto_stream'] = SimpleItem(defvalue=False,doc=docstr)
     docstr = 'Use local random trigger files'
     schema['local_rantrg'] = SimpleItem(defvalue=True,doc=docstr)
     docstr = 'Patch files'
@@ -312,7 +314,7 @@ class Gaudi(Francesc):
         self.extra.metadata['eventType'] = self.extra.metadata['eventType'].lower()
 
         # automatically get the stream ID
-        if not self.extra.metadata.has_key('streamId'):
+        if self.auto_stream and not self.extra.metadata.has_key('streamId'):
             bdr = BDRegister(self.extra.metadata)
             self.extra.metadata['streamId'] = bdr.getUnusedStream2(self.output_dir)
 
@@ -351,7 +353,7 @@ class Gaudi(Francesc):
         taskInfo['GangaID'] = job.id
         taskInfo['LocalRandomTrigger'] = self.local_rantrg
         taskInfo['OutputStep'] = self.output_step
-        taskInfo['StreamID'] = self.extra.metadata.get('streamId', 'streamxxx')
+        taskInfo['StreamID'] = self.extra.metadata.get('streamId', '')
         taskInfo['JobOptionSim'] = [fileitem.name for fileitem in self.optsfile]
         taskInfo['JobOptionRec'] = [fileitem.name for fileitem in self.recoptsfile]
         taskInfo['JobOptionAna'] = [fileitem.name for fileitem in self.anaoptsfile]
