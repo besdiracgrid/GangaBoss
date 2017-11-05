@@ -605,8 +605,10 @@ class UserSplitterByRun(BossBaseSplitter):
         bossVer = job.application.extra.metadata.get('bossVer', 'xxx')
         resonance = job.application.extra.metadata.get('resonance', 'unknown')
         eventType = job.application.extra.metadata.get('eventType', 'unknown')
-        streamId = job.application.extra.metadata.get('streamId', 'streamxxx')
-        head = bossVer + '_' + resonance + '_' + eventType + '_' + streamId
+        streamId = job.application.extra.metadata.get('streamId', '')
+        head = bossVer + '_' + resonance + '_' + eventType
+        if streamId:
+            head += ('_' + streamId)
 
 
         dbuser = config["dbuser"]
@@ -740,8 +742,11 @@ class UserSplitterByEvent(BossBaseSplitter):
         bossVer = job.application.extra.metadata.get('bossVer', 'xxx')
         resonance = job.application.extra.metadata.get('resonance', 'unknown')
         eventType = job.application.extra.metadata.get('eventType', 'unknown')
-        streamId = job.application.extra.metadata.get('streamId', 'streamxxx')
-        head = '%s_%s_%s_%s_%s_%s' % (bossVer, resonance, eventType, streamId, runFrom, runTo)
+        streamId = job.application.extra.metadata.get('streamId', '')
+        if streamId:
+            head = '%s_%s_%s_%s_%s_%s' % (bossVer, resonance, eventType, streamId, runFrom, runTo)
+        else:
+            head = '%s_%s_%s_%s_%s' % (bossVer, resonance, eventType, runFrom, runTo)
 
 
         i = 0
