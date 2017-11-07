@@ -445,7 +445,7 @@ def uploadData(lfn, maxRetry=5, minWait=0, maxWait=60):
     fn = os.path.basename(lfn)
     path = os.path.join(os.getcwd(), fn)
     for i in range(maxRetry):
-        result = cmd(['globus-url-copy', 'file:///%s'%path, 'gsiftp://storm.ihep.ac.cn:2811%s'%lfn])
+        result = cmd(['globus-url-copy', '-sync', 'file:///%s'%path, 'gsiftp://storm.ihep.ac.cn:2811%s'%lfn])
         if not result:
             break
         if i+1 >= maxRetry:

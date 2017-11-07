@@ -1,6 +1,12 @@
 GangaBoss CHANGELOG
 ===================
 
+v1.2.5 (2017-11-07)
+-------------------
+
+### Change
+- Upload data also use "globus-url-copy -sync"
+
 v1.2.4 (2017-11-03)
 -------------------
 
